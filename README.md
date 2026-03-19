@@ -202,4 +202,9 @@ Built with:
 
 ---
 
-**Made with 💪 by someone who wanted AI coaching that actually works.**
+## Author
+
+**Matthew Morsch**
+[LinkedIn](https://www.linkedin.com/in/matthewmorsch) | [GitHub](https://github.com/mmorsch1-collab)
+
+Built to demonstrate real-world AI integration, OAuth management, and health tech development.

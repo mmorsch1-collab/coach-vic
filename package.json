@@ -22,7 +22,7 @@
     "anthropic",
     "claude"
   ],
-  "author": "",
+  "author": "Matthew Morsch (https://www.linkedin.com/in/matthewmorsch)",
   "license": "MIT",
   "dependencies": {
     "chalk": "^4.1.2",

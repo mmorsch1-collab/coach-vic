@@ -220,3 +220,8 @@ See `examples/systemd/bridge-api.service` for systemd unit file.
 ## License
 
 MIT
+
+## Author
+
+**Matthew Morsch**
+[LinkedIn](https://www.linkedin.com/in/matthewmorsch)
