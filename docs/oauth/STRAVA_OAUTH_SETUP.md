@@ -32,7 +32,7 @@ Health & Fitness
 
 **Website:**
 ```
-https://github.com/yourusername/coach-vic
+https://github.com/mmorsch1-collab/coach-vic
 ```
 
 **Application Description:**

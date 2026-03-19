@@ -63,8 +63,8 @@ Select all **"Read"** permissions:
 
 If required, you can use:
 ```
-Privacy Policy URL: https://your-github-repo/PRIVACY.md
-Terms of Service URL: https://your-github-repo/TERMS.md
+Privacy Policy URL: https://coach-vic/PRIVACY.md
+Terms of Service URL: https://coach-vic/TERMS.md
 ```
 
 (Or leave blank if personal use only)

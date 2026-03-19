@@ -67,7 +67,7 @@ your-email@gmail.com
 
 **Application home page:** (optional)
 ```
-https://github.com/yourusername/coach-vic
+https://github.com/mmorsch1-collab/coach-vic
 ```
 
 **Application privacy policy:** (optional)

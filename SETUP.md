@@ -32,7 +32,7 @@ Before starting, ensure you have:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/coach-vic.git
+git clone https://github.com/mmorsch1-collab/coach-vic.git
 cd coach-vic
 
 # Install root dependencies (setup scripts)
@@ -424,5 +424,5 @@ See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for common issues.
 ## Need Help?
 
 - **Documentation:** See `/docs` folder
-- **Issues:** [GitHub Issues](https://github.com/yourusername/coach-vic/issues)
+- **Issues:** [GitHub Issues](https://github.com/mmorsch1-collab/coach-vic/issues)
 - **Claude Code:** Run `claude` and say "Help me troubleshoot Coach Vic"

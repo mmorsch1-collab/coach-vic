@@ -338,7 +338,7 @@ openclaw --version
    Then say: "Help me troubleshoot Coach Vic [describe your issue]"
 
 2. **Check GitHub Issues:**
-   https://github.com/yourusername/coach-vic/issues
+   https://github.com/mmorsch1-collab/coach-vic/issues
 
 3. **Create New Issue:**
    Include:

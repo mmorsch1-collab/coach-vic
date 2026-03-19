@@ -38,10 +38,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/coach-vic.git"
+    "url": "https://github.com/mmorsch1-collab/coach-vic.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/coach-vic/issues"
+    "url": "https://github.com/mmorsch1-collab/coach-vic/issues"
   },
-  "homepage": "https://github.com/yourusername/coach-vic#readme"
+  "homepage": "https://github.com/mmorsch1-collab/coach-vic#readme"
 }

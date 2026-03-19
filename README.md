@@ -70,7 +70,7 @@ As OpenClaw's founder said: "If you don't know CLI, maybe OpenClaw isn't for you
 **Time: 45-90 minutes**
 
 ```bash
-git clone https://github.com/yourusername/coach-vic.git
+git clone https://github.com/mmorsch1-collab/coach-vic.git
 cd coach-vic
 claude
 ```
@@ -88,7 +88,7 @@ See [SETUP.md](SETUP.md) for step-by-step instructions.
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/yourusername/coach-vic.git
+git clone https://github.com/mmorsch1-collab/coach-vic.git
 cd coach-vic
 
 # 2. Install dependencies
@@ -208,7 +208,7 @@ Contributions welcome! Please:
 
 ## Support
 
-- **Issues:** [GitHub Issues](https://github.com/yourusername/coach-vic/issues)
+- **Issues:** [GitHub Issues](https://github.com/mmorsch1-collab/coach-vic/issues)
 - **Documentation:** See `/docs` folder
 - **Discord:** [Join the community](https://discord.gg/yourinvite)
 

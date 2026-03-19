@@ -104,7 +104,7 @@ You'll see JSON with your chat ID:
     "message": {
       "message_id": 1,
       "from": {
-        "id": 8062247102,  // ← This is your chat ID
+        "id": 123456789,  // ← This is your chat ID
         "first_name": "Your Name"
       }
     }
