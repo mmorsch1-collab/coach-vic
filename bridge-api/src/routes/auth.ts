@@ -827,7 +827,7 @@ router.get(
 router.get(
   '/strava/callback',
   asyncHandler(async (req: Request, res: Response) => {
-    const { code, error, scope } = req.query;
+    const { code, error } = req.query;
 
     // Handle user denial
     if (error) {

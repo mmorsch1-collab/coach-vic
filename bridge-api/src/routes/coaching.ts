@@ -332,7 +332,7 @@ router.post(
       data: sheet,
     };
 
-    res.status(201).json(response);
+    return res.status(201).json(response);
   })
 );
 
@@ -408,7 +408,7 @@ router.put(
       data: { message: `Data written to sheet "${title}" successfully` },
     };
 
-    res.json(response);
+    return res.json(response);
   })
 );
 
@@ -439,7 +439,7 @@ router.post(
       data: { message: `${data.length} rows appended to sheet "${title}" successfully` },
     };
 
-    res.status(201).json(response);
+    return res.status(201).json(response);
   })
 );
 
@@ -477,7 +477,7 @@ router.put(
       data: { message: `Range ${range} in sheet "${title}" updated successfully` },
     };
 
-    res.json(response);
+    return res.json(response);
   })
 );
 
