@@ -64,9 +64,11 @@ As OpenClaw's founder said: "If you don't know CLI, maybe OpenClaw isn't for you
 3. **Claude** - Haiku 4.5 for pattern recognition, Sonnet 4.5 for complex reasoning
 4. **Telegram** - Delivery channel
 
-## Setup Options
+## Setup
 
-### Option A: With Claude Code (Recommended)
+**This project is optimized for Claude Code users.** Claude Code will guide you through setup interactively.
+
+### Recommended: Claude Code Setup
 **Time: 45-90 minutes**
 
 ```bash
@@ -75,42 +77,19 @@ cd coach-vic
 claude
 ```
 
-Then say: "Help me set up Coach Vic"
+Then say: **"Help me set up Coach Vic"**
 
-Claude Code will walk you through everything.
+Claude Code will:
+- Walk you through getting OAuth credentials for each service
+- Help configure your `.env` files
+- Guide you through running OAuth flows
+- Help debug any issues that come up
+- Get you running quickly
 
-### Option B: Manual Setup
+### Alternative: Manual Setup
 **Time: 1.5-2 hours**
 
-See [SETUP.md](SETUP.md) for step-by-step instructions.
-
-## Quick Start
-
-```bash
-# 1. Clone the repo
-git clone https://github.com/mmorsch1-collab/coach-vic.git
-cd coach-vic
-
-# 2. Install dependencies
-npm install
-
-# 3. Run setup wizard
-npm run setup
-
-# 4. Configure OAuth credentials (wizard will guide you)
-# - WHOOP Developer Account
-# - Withings Developer Account (optional)
-# - Strava Developer Account (optional)
-# - Google Cloud Project (optional)
-# - Telegram Bot via BotFather
-# - Anthropic API Key
-
-# 5. Run OAuth flows
-npm run auth:all
-
-# 6. Start everything
-npm run start
-```
+If you prefer to do it manually or don't have Claude Code, follow the detailed step-by-step guide: [SETUP.md](SETUP.md)
 
 ## Core Setup vs Optional Integrations
 
@@ -131,7 +110,7 @@ Each optional integration adds 15-20 minutes setup time.
 ## What You Get
 
 - Complete source code (Bridge API + OpenClaw workspace)
-- Interactive setup wizard
+- Comprehensive setup guides for manual or Claude Code-assisted setup
 - OAuth setup guides for each service
 - Cost optimization guide (how to run for $0.50/day vs $15/day)
 - Google Sheets templates

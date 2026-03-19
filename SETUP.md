@@ -15,6 +15,9 @@ Before starting, ensure you have:
 
 ## Setup Overview
 
+**Recommended:** Use Claude Code for interactive guided setup. Just run `claude` and say "Help me set up Coach Vic"
+
+**Manual Setup Steps:**
 1. Clone repository
 2. Install dependencies
 3. Get OAuth credentials (5 accounts)
@@ -24,7 +27,7 @@ Before starting, ensure you have:
 7. Start services
 8. Test
 
-**Estimated time:** 1-2 hours for core setup
+**Estimated time:** 1-2 hours for manual setup, 45-90 min with Claude Code
 
 ---
 
