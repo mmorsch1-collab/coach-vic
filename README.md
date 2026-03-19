@@ -113,7 +113,7 @@ Each optional integration adds 15-20 minutes setup time.
 - Comprehensive setup guides for manual or Claude Code-assisted setup
 - OAuth setup guides for each service
 - Cost optimization guide (how to run for $0.50/day vs $15/day)
-- Google Sheets templates
+- Example configuration files
 - Troubleshooting documentation
 
 ## Documentation
@@ -123,7 +123,7 @@ Each optional integration adds 15-20 minutes setup time.
 - [Cost Optimization](docs/COST_OPTIMIZATION.md) - How to minimize API costs
 - [OAuth Setup Guides](docs/oauth/) - Step-by-step for each service
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
-- [API Documentation](docs/API.md) - Bridge API endpoints
+- [API Reference](openclaw-workspace/TOOLS.md) - Bridge API endpoints
 
 ## Project Structure
 
@@ -189,7 +189,7 @@ Contributions welcome! Please:
 
 - **Issues:** [GitHub Issues](https://github.com/mmorsch1-collab/coach-vic/issues)
 - **Documentation:** See `/docs` folder
-- **Discord:** [Join the community](https://discord.gg/yourinvite)
+- **Claude Code:** Run `claude` in the repo and ask for help
 
 ## Acknowledgments
 
