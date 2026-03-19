@@ -1,0 +1,24 @@
+{
+  "whoop": {
+    "access_token": "your_access_token_will_be_here",
+    "refresh_token": "your_refresh_token_will_be_here",
+    "expires_at": 1234567890,
+    "scope": "read:recovery read:sleep read:workout read:cycles read:profile"
+  },
+  "withings": {
+    "access_token": "your_access_token_will_be_here",
+    "refresh_token": "your_refresh_token_will_be_here",
+    "expires_at": 1234567890
+  },
+  "strava": {
+    "access_token": "your_access_token_will_be_here",
+    "refresh_token": "your_refresh_token_will_be_here",
+    "expires_at": 1234567890
+  },
+  "google": {
+    "access_token": "your_access_token_will_be_here",
+    "refresh_token": "your_refresh_token_will_be_here",
+    "expires_at": 1234567890,
+    "scope": "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/spreadsheets"
+  }
+}

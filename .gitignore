@@ -1,0 +1,68 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OAuth tokens (NEVER commit these)
+tokens.json
+*.tokens.json
+
+# OpenClaw
+.openclaw/
+!.openclaw/.gitkeep
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Testing
+coverage/
+.nyc_output/
+
+# PM2
+.pm2/
+ecosystem.config.js
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Personal data (examples - customize for your setup)
+whoop-snapshot.json
+personal-data/
+my-*.md
+
+# Google Sheets exports
+sheets-export/
+*.csv

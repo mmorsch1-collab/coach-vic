@@ -1,0 +1,47 @@
+{
+  "name": "coach-vic",
+  "version": "1.0.0",
+  "description": "Open source AI health coach that monitors WHOOP, Withings, and Strava for proactive coaching",
+  "main": "index.js",
+  "scripts": {
+    "setup": "node scripts/setup-wizard.js",
+    "validate": "node scripts/validate-setup.js",
+    "auth:all": "node scripts/run-oauth-flows.js",
+    "start": "npm run start:bridge & npm run start:openclaw",
+    "start:bridge": "cd bridge-api && npm start",
+    "start:openclaw": "openclaw gateway --port 18789",
+    "dev": "npm run dev:bridge & npm run dev:openclaw",
+    "dev:bridge": "cd bridge-api && npm run dev",
+    "dev:openclaw": "openclaw gateway --port 18789 --verbose",
+    "test": "cd bridge-api && npm test"
+  },
+  "keywords": [
+    "ai",
+    "health",
+    "coach",
+    "whoop",
+    "fitness",
+    "telegram",
+    "openclaw",
+    "anthropic",
+    "claude"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "inquirer": "^8.2.5"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/coach-vic.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/coach-vic/issues"
+  },
+  "homepage": "https://github.com/yourusername/coach-vic#readme"
+}
