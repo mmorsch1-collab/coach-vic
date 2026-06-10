@@ -1,0 +1,595 @@
+import type Anthropic from '@anthropic-ai/sdk';
+import { bridge } from '../bridge/client.js';
+import { appendDailyLog, appendMemoryMd, editBrainFile, EDITABLE_BRAIN_FILES } from '../memory/store.js';
+import { invalidateSystemCache } from './systemPrompt.js';
+import { appendEntry, DB_FILES, type DbFile } from '../memory/databases.js';
+import { todayStr } from '../util/time.js';
+import { config } from '../config.js';
+import { logger } from '../logger.js';
+import { e1rm, exerciseSeries, parseWorkoutDb, weeklyHardSets, slopePerWeek, VOLUME_BANDS } from '../coaching/metrics.js';
+import { invalidateSnapshot } from '../coaching/snapshot.js';
+import { logMeal, PROTEIN_TARGET_G } from '../coaching/nutrition.js';
+import { ingestWorkout } from '../coaching/workoutIngest.js';
+
+/**
+ * Tools Coach Vic can call. Bridge tools = read/write health data; memory tools =
+ * persist what was learned (write-back). Kept small and explicit.
+ */
+
+export const TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'get_whoop_today',
+    description:
+      "Today's WHOOP recovery, sleep, and strain. ALWAYS check recovery.metadata.updated_at " +
+      'freshness (within 2h) and score_state === "SCORED" before making coaching claims.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_withings_latest',
+    description: 'Latest Withings body composition (weight, body fat %, muscle mass).',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_withings_history',
+    description: 'Recent Withings weight/body-comp history for trend analysis.',
+    input_schema: {
+      type: 'object',
+      properties: { days: { type: 'number', description: 'Days of history (default 7).' } },
+    },
+  },
+  {
+    name: 'get_strava_latest',
+    description: 'Most recent Strava activity (type, distance, HR, pace).',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_calendar_today',
+    description: "Today's calendar events (for scheduling/availability context).",
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'create_calendar_event',
+    description:
+      'Create a calendar event (e.g., the 5:30 AM workout block). Times are local wall-clock ' +
+      'in the user timezone; pass ISO-like "YYYY-MM-DDTHH:MM:SS" without a Z.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        startTime: { type: 'string', description: 'e.g. 2026-06-09T05:30:00' },
+        endTime: { type: 'string', description: 'e.g. 2026-06-09T06:30:00' },
+        description: { type: 'string' },
+        location: { type: 'string' },
+      },
+      required: ['title', 'startTime', 'endTime'],
+    },
+  },
+  {
+    name: 'create_workout',
+    description:
+      'Create the daily workout sheet (tab Workout_YYYY-MM-DD in the canonical spreadsheet) and ' +
+      'return its URL. Follow WORKOUT_PROTOCOL.md: recovery-appropriate, goal-aligned, with ' +
+      'Target columns and Last-Time references.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'YYYY-MM-DD of the workout.' },
+        title: { type: 'string', description: 'e.g. "CHEST - GYM (Recovery 78%)".' },
+        recovery: { type: 'string', description: 'Recovery context as text, e.g. "73% (green)".' },
+        exercises: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              sets: { type: 'integer', description: 'Number of sets, 1-20.' },
+              targetReps: { type: 'integer', description: 'Target reps per set.' },
+              targetWeight: { type: 'string', description: 'Target weight as text, e.g. "45 lb" or "BW".' },
+              notes: { type: 'string' },
+            },
+            required: ['name', 'sets'],
+          },
+        },
+      },
+      required: ['date', 'title', 'exercises'],
+    },
+  },
+  {
+    name: 'save_whoop_snapshot',
+    description: 'Persist today\'s WHOOP numbers to the history sheet (for trend tracking).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string' },
+        recovery: { type: 'number' },
+        hrv: { type: 'number' },
+        restingHeartRate: { type: 'number' },
+        sleepHours: { type: 'number' },
+        sleepScore: { type: 'number' },
+        strain: { type: 'number' },
+      },
+      required: ['date'],
+    },
+  },
+  {
+    name: 'get_goals',
+    description: 'Read tracked goals from the sheet.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_workout',
+    description:
+      'Read a workout sheet for a given date (parsed), INCLUDING the Actual Weight/Reps columns ' +
+      'Matt has filled in. Use to review a completed session, discuss a key lift, or reference ' +
+      'last time for progressive overload.',
+    input_schema: {
+      type: 'object',
+      properties: { date: { type: 'string', description: 'YYYY-MM-DD of the workout.' } },
+      required: ['date'],
+    },
+  },
+  {
+    name: 'list_sheets',
+    description:
+      'List all tab names in the canonical coaching spreadsheet (e.g. to find recent Workout_* ' +
+      'tabs for progression, or other tracking tabs).',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'read_sheet',
+    description:
+      'Read raw rows from a tab in the canonical spreadsheet (optionally an A1 range). Use before ' +
+      'editing so you know the exact row/column layout.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Tab name, e.g. "Workout_2026-06-09".' },
+        range: { type: 'string', description: 'Optional A1 range, e.g. "A1:H20".' },
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'update_sheet_range',
+    description:
+      'Write/overwrite cells in a tab at a specific A1 range — use to EDIT a workout (fill in ' +
+      "Matt's actual weights/reps, tweak targets, add notes). Read the sheet first to target the " +
+      'right cells. `data` is a 2D array matching the range shape.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Tab name, e.g. "Workout_2026-06-09".' },
+        range: { type: 'string', description: 'A1 range to write, e.g. "F5:G5".' },
+        data: {
+          type: 'array',
+          description: '2D array of cell values matching the range.',
+          items: { type: 'array', items: {} },
+        },
+      },
+      required: ['title', 'range', 'data'],
+    },
+  },
+  {
+    name: 'get_whoop_history',
+    description: 'Recent WHOOP history (recovery/HRV/sleep/strain snapshots) for trend analysis.',
+    input_schema: {
+      type: 'object',
+      properties: { days: { type: 'number', description: 'Days of history (default 7).' } },
+    },
+  },
+  {
+    name: 'update_calendar_event',
+    description:
+      'Edit an existing calendar event (reschedule, retitle, change description/location). Get the ' +
+      'event id from get_calendar_today. Times are local wall-clock "YYYY-MM-DDTHH:MM:SS".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        title: { type: 'string' },
+        startTime: { type: 'string' },
+        endTime: { type: 'string' },
+        description: { type: 'string' },
+        location: { type: 'string' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'delete_calendar_event',
+    description: 'Delete a calendar event by id (get the id from get_calendar_today).',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'log_set',
+    description:
+      "Log a completed exercise into WORKOUT_DATABASE (the canonical progression history). Call " +
+      "this whenever Matt reports what he actually did, so history accumulates and e1RM/progression " +
+      "compute correctly. e1RM is auto-computed. Include RIR (reps-in-reserve on the hardest set, " +
+      "0=failure..4) when he gives it.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'YYYY-MM-DD (default today if omitted).' },
+        session: { type: 'string', description: 'e.g. "Mon Chest".' },
+        exercise: { type: 'string' },
+        weight: { type: 'number', description: 'Working weight in lbs.' },
+        set1: { type: 'number', description: 'Reps set 1.' },
+        set2: { type: 'number', description: 'Reps set 2.' },
+        set3: { type: 'number', description: 'Reps set 3.' },
+        rir: { type: 'number', description: 'Reps in reserve on the hardest set (0-4).' },
+        notes: { type: 'string' },
+      },
+      required: ['exercise', 'weight'],
+    },
+  },
+  {
+    name: 'log_workout',
+    description:
+      'Log a COMPLETED workout (multiple lifts at once) to WORKOUT_DATABASE — the canonical source for ' +
+      'volume + progression. Use when Matt reports a finished session. Volume and e1RM are computed ONLY ' +
+      'from WORKOUT_DATABASE; the Workout_<date> sheet tabs are PLANS/targets — never count their numbers ' +
+      'as completed volume.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'YYYY-MM-DD (default today).' },
+        session: { type: 'string', description: 'e.g. "Chest Day".' },
+        lifts: {
+          type: 'array',
+          description: 'Each completed exercise.',
+          items: {
+            type: 'object',
+            properties: {
+              exercise: { type: 'string' },
+              weight: { type: 'number', description: 'Working weight in lbs.' },
+              set1: { type: 'number' },
+              set2: { type: 'number' },
+              set3: { type: 'number' },
+              rir: { type: 'number', description: 'Reps in reserve, hardest set (0-4).' },
+              notes: { type: 'string' },
+            },
+            required: ['exercise', 'weight'],
+          },
+        },
+      },
+      required: ['lifts'],
+    },
+  },
+  {
+    name: 'ingest_workout',
+    description:
+      "Read Matt's filled-in Workout_<date> sheet and import his ACTUAL completed sets into " +
+      'WORKOUT_DATABASE (deduped). Call this when he says he finished/completed his workout.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'YYYY-MM-DD (default today if omitted).' },
+      },
+    },
+  },
+  {
+    name: 'log_meal',
+    description:
+      "Log a meal/snack's protein the MOMENT Matt mentions food. Appends to the deterministic daily " +
+      'nutrition log; the running daily total appears in your snapshot every turn, so you never re-sum ' +
+      'from memory or forget an earlier meal. Estimate protein in grams (use the midpoint of a range).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        protein_g: { type: 'number', description: 'Estimated protein in grams.' },
+        food: { type: 'string', description: 'What he ate.' },
+        meal: { type: 'string', description: 'breakfast | lunch | dinner | snack (optional).' },
+      },
+      required: ['protein_g', 'food'],
+    },
+  },
+  {
+    name: 'get_exercise_progression',
+    description:
+      'Full progression history for one lift from WORKOUT_DATABASE: per-session top set, e1RM, ' +
+      'and the e1RM trend (est. 1RM change/week). Use to ground "last time" + set the next target.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        exercise: { type: 'string' },
+        limit: { type: 'number', description: 'How many recent sessions (default 10).' },
+      },
+      required: ['exercise'],
+    },
+  },
+  {
+    name: 'get_muscle_volume',
+    description:
+      'Weekly hard-set count per muscle group (last 7 days) vs evidence-based landmarks ' +
+      '(MEV/MAV/MRV), to balance the split and avoid under/over-training.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_bodycomp_trend',
+    description:
+      'Body-composition trend from BODY_COMPOSITION: recent weight/BF% and the weight slope ' +
+      '(lb/week) for managing the cut/maintenance rate.',
+    input_schema: {
+      type: 'object',
+      properties: { days: { type: 'number', description: 'Window in days (default 21).' } },
+    },
+  },
+  {
+    name: 'remember',
+    description:
+      'Write-back a durable memory so future coaching is grounded. Choose the right database. ' +
+      'Use for new context about Matt, a preference, a coaching insight (what worked/failed), ' +
+      'or a performance pattern.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        database: {
+          type: 'string',
+          enum: DB_FILES as unknown as string[],
+          description: 'Which RAG database to append to.',
+        },
+        title: { type: 'string', description: 'Short entry header, e.g. "ctx_019 — meal timing".' },
+        body: { type: 'string', description: 'The entry content (markdown).' },
+      },
+      required: ['database', 'title', 'body'],
+    },
+  },
+  {
+    name: 'log_today',
+    description: 'Append a short raw note to today\'s daily log (memory/YYYY-MM-DD.md).',
+    input_schema: {
+      type: 'object',
+      properties: { note: { type: 'string' } },
+      required: ['note'],
+    },
+  },
+  {
+    name: 'update_coaching_rule',
+    description:
+      'Durably change your OWN coaching behavior by editing one of your brain files (rules, ' +
+      'preferences, goal, persona, science). Takes effect IMMEDIATELY (hot-reload, no restart). ' +
+      'Use when Matt asks you to change how you coach, add/change a rule, or update a preference or ' +
+      'goal. Prefer `append` for a new rule; use `find`/`replace` to change existing text. ' +
+      'You CANNOT edit code/logic/tools this way — for those, tell Matt it needs Claude Code. ' +
+      'Always tell Matt exactly what you changed.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          enum: Array.from(EDITABLE_BRAIN_FILES) as unknown as string[],
+          description: 'Which brain file to edit (e.g. WORKOUT_PROTOCOL.md for training rules, GOAL.md, MEMORY.md).',
+        },
+        append: { type: 'string', description: 'Text to add at the end (a new rule/line/section).' },
+        find: { type: 'string', description: 'Exact existing text to replace (optional).' },
+        replace: { type: 'string', description: 'Replacement for `find` (omit to delete it).' },
+      },
+      required: ['file'],
+    },
+  },
+  {
+    name: 'update_long_term_memory',
+    description:
+      'Append a distilled, durable fact to MEMORY.md (curated long-term memory). Main/private ' +
+      'chat only. Use sparingly for things worth remembering for months.',
+    input_schema: {
+      type: 'object',
+      properties: { line: { type: 'string' } },
+      required: ['line'],
+    },
+  },
+];
+
+export interface ToolContext {
+  sessionType: 'main' | 'isolated';
+}
+
+/** Execute a tool call and return a string result for the model. */
+export async function executeTool(
+  name: string,
+  input: any,
+  ctx: ToolContext,
+): Promise<string> {
+  try {
+    switch (name) {
+      case 'get_whoop_today':
+        return json(await bridge.whoopToday());
+      case 'get_withings_latest':
+        // Flat summary (weight + body comp merged) — better for the LLM than raw /latest.
+        return json(await bridge.withingsSummary());
+      case 'get_withings_history':
+        return json(await bridge.withingsHistory(input?.days ?? 7));
+      case 'get_strava_latest':
+        return json(await bridge.stravaLatest());
+      case 'get_calendar_today':
+        return json(await bridge.calendarToday());
+      case 'create_calendar_event':
+        return json(
+          await bridge.createCalendarEvent({
+            title: input.title,
+            startTime: input.startTime,
+            endTime: input.endTime,
+            description: input.description,
+            location: input.location,
+            timeZone: config.tz,
+          }),
+        );
+      case 'create_workout':
+        return json(
+          await bridge.createWorkout({
+            date: input.date,
+            title: input.title,
+            // Bridge expects recovery as a string; coerce defensively.
+            recovery: input.recovery != null ? String(input.recovery) : undefined,
+            exercises: input.exercises ?? [],
+          }),
+        );
+      case 'save_whoop_snapshot':
+        return json(await bridge.whoopSnapshot(input));
+      case 'get_goals':
+        return json(await bridge.getGoals());
+      case 'get_workout':
+        return json(await bridge.getWorkout(input.date));
+      case 'list_sheets':
+        return json(await bridge.listSheets());
+      case 'read_sheet':
+        return json(await bridge.readSheet(input.title, input.range));
+      case 'update_sheet_range':
+        return json(await bridge.updateSheetRange(input.title, input.range, input.data ?? []));
+      case 'get_whoop_history':
+        return json(await bridge.whoopHistory(input?.days ?? 7));
+      case 'update_calendar_event':
+        return json(
+          await bridge.updateCalendarEvent(input.id, {
+            title: input.title,
+            startTime: input.startTime,
+            endTime: input.endTime,
+            description: input.description,
+            location: input.location,
+            timeZone: config.tz,
+          }),
+        );
+      case 'delete_calendar_event':
+        return json(await bridge.deleteCalendarEvent(input.id));
+      case 'log_set': {
+        const date = input.date || todayStr(config.tz);
+        const reps = [input.set1, input.set2, input.set3].map((n: any) => Number(n)).filter((n) => Number.isFinite(n) && n > 0);
+        const topReps = reps.length ? Math.max(...reps) : 0;
+        const est = Math.round(e1rm(Number(input.weight) || 0, topReps) * 10) / 10;
+        await bridge.appendSheet('WORKOUT_DATABASE', [[
+          date,
+          input.session ?? '',
+          input.exercise,
+          Number(input.weight) || '',
+          input.set1 ?? '',
+          input.set2 ?? '',
+          input.set3 ?? '',
+          input.notes ?? '',
+          input.rir ?? '',
+          est || '',
+        ]]);
+        invalidateSnapshot();
+        return ok(`Logged ${input.exercise} ${input.weight}lb ${reps.join('/')} (e1RM ${est}) to WORKOUT_DATABASE.`);
+      }
+      case 'log_workout': {
+        const date = input.date || todayStr(config.tz);
+        const lifts = Array.isArray(input.lifts) ? input.lifts : [];
+        if (!lifts.length) return ok('No lifts provided.');
+        const rows = lifts.map((l: any) => {
+          const reps = [l.set1, l.set2, l.set3].map((n: any) => Number(n)).filter((n) => Number.isFinite(n) && n > 0);
+          const top = reps.length ? Math.max(...reps) : 0;
+          const est = Math.round(e1rm(Number(l.weight) || 0, top) * 10) / 10;
+          return [date, input.session ?? '', l.exercise, Number(l.weight) || '', l.set1 ?? '', l.set2 ?? '', l.set3 ?? '', l.notes ?? '', l.rir ?? '', est || ''];
+        });
+        await bridge.appendSheet('WORKOUT_DATABASE', rows);
+        invalidateSnapshot();
+        return ok(`Logged ${rows.length} lift(s) to WORKOUT_DATABASE for ${date}: ${lifts.map((l: any) => l.exercise).join(', ')}.`);
+      }
+      case 'ingest_workout': {
+        const res = await ingestWorkout(input?.date);
+        return ok(
+          res.added > 0
+            ? `Imported ${res.added} exercise(s) into WORKOUT_DATABASE: ${res.exercises.join(', ')}${res.skipped ? ` (skipped ${res.skipped} already-logged)` : ''}.`
+            : `No new actuals to import${res.skipped ? ` (${res.skipped} already logged)` : ' (no filled sets found)'}.`,
+        );
+      }
+      case 'log_meal': {
+        const grams = Number(input.protein_g) || 0;
+        const r = await logMeal({ proteinG: grams, food: input.food ?? '', meal: input.meal });
+        invalidateSnapshot();
+        return ok(`Logged ${input.food} (${Math.round(grams)}g protein). Today: ${Math.round(r.totalG)}g / ${PROTEIN_TARGET_G}g — ${r.remainingG}g to go.`);
+      }
+      case 'get_exercise_progression': {
+        const rows = await bridge.readSheet('WORKOUT_DATABASE');
+        const logs = parseWorkoutDb(rows as unknown[][]);
+        const series = exerciseSeries(logs, input.exercise);
+        const limited = series.slice(-(input.limit ?? 10));
+        const slope = slopePerWeek(series.slice(-6).map((p) => ({ date: p.date, y: p.topE1rm })));
+        return json({ exercise: input.exercise, sessions: limited, e1rm_slope_per_week: Math.round(slope * 10) / 10 });
+      }
+      case 'get_muscle_volume': {
+        const rows = await bridge.readSheet('WORKOUT_DATABASE');
+        const logs = parseWorkoutDb(rows as unknown[][]);
+        const hs = weeklyHardSets(logs, 7);
+        const result = Object.keys(VOLUME_BANDS).map((m) => {
+          const n = hs[m] || 0;
+          const b = VOLUME_BANDS[m];
+          return { muscle: m, hard_sets_7d: n, ...b, status: n < b.mev ? 'under' : n > b.mrv ? 'over' : 'in_range' };
+        });
+        return json(result);
+      }
+      case 'get_bodycomp_trend': {
+        const rows = (await bridge.readSheet('BODY_COMPOSITION')) as unknown[][];
+        const days = input?.days ?? 21;
+        const header = (rows[0] || []).map((h) => String(h ?? '').trim().toLowerCase());
+        const di = header.findIndex((h) => h.includes('date'));
+        const wi = header.findIndex((h) => h.includes('weight'));
+        // Body-fat %, not "fat free mass" / "visceral fat": require body+fat or fat+%.
+        let fi = header.findIndex((h) => h.includes('body') && h.includes('fat'));
+        if (fi < 0) fi = header.findIndex((h) => h.includes('fat') && h.includes('%'));
+        const pts: Array<{ date: string; weight: number; bf: number }> = [];
+        for (let r = 1; r < rows.length; r++) {
+          const row = rows[r] || [];
+          const d = String(row[di] ?? '').trim();
+          const w = Number(row[wi]);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !Number.isFinite(w)) continue;
+          pts.push({ date: d, weight: w, bf: Number(row[fi]) });
+        }
+        pts.sort((a, b) => a.date.localeCompare(b.date));
+        const cutoff = Date.now() - days * 86400000;
+        const windowed = pts.filter((p) => Date.parse(p.date + 'T12:00:00') >= cutoff);
+        const slope = slopePerWeek((windowed.length ? windowed : pts).map((p) => ({ date: p.date, y: p.weight })));
+        return json({
+          recent: pts.slice(-8),
+          weight_slope_lb_per_week: Math.round(slope * 100) / 100,
+          latest: pts[pts.length - 1] ?? null,
+        });
+      }
+      case 'remember':
+        await appendEntry(input.database as DbFile, input.title, input.body);
+        return ok(`Saved to ${input.database}.`);
+      case 'log_today':
+        await appendDailyLog(todayStr(config.tz), input.note);
+        return ok('Logged.');
+      case 'update_coaching_rule': {
+        if (ctx.sessionType !== 'main') return ok('Rule edits are only allowed in private chat.');
+        const res = await editBrainFile(input.file, {
+          append: input.append,
+          find: input.find,
+          replace: input.replace,
+        });
+        if (res.ok) {
+          invalidateSystemCache(); // hot-reload the brain on the next turn
+          invalidateSnapshot();
+          await appendDailyLog(
+            todayStr(config.tz),
+            `[rule-change] ${input.file}: ${input.append ?? `${input.find} → ${input.replace ?? '(deleted)'}`}`,
+          );
+        }
+        return json(res);
+      }
+      case 'update_long_term_memory':
+        if (ctx.sessionType !== 'main') return ok('Skipped: long-term memory is main-session only.');
+        await appendMemoryMd(input.line);
+        return ok('MEMORY.md updated.');
+      default:
+        return ok(`Unknown tool: ${name}`);
+    }
+  } catch (err: any) {
+    logger.warn({ err, tool: name }, 'Tool execution failed');
+    // Return the error to the model so it can degrade gracefully instead of crashing.
+    return json({ error: true, message: err?.message ?? String(err), code: err?.code });
+  }
+}
+
+function json(v: unknown): string {
+  return JSON.stringify(v ?? null);
+}
+function ok(message: string): string {
+  return JSON.stringify({ ok: true, message });
+}

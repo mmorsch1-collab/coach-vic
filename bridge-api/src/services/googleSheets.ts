@@ -421,22 +421,56 @@ export class GoogleSheetsService {
       const sheets = await this.getSheetsClient();
       const sheetTitle = `Workout_${date}`;
 
-      // Create the new tab and capture the response
-      const createResponse = await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: this.SPREADSHEET_ID,
-        requestBody: {
-          requests: [
-            {
-              addSheet: {
-                properties: { title: sheetTitle },
-              },
-            },
-          ],
-        },
-      });
+      // Idempotent AND gid-stable: if a tab with this name already exists, REUSE it
+      // (clear its contents) rather than delete+recreate. Re-creating assigns a new
+      // gid, which orphans any calendar-event link pointing at #gid=<old>. Reusing
+      // keeps the gid constant so the link stays valid across re-runs (e.g. the 7 AM
+      // fallback or a manual re-trigger).
+      const findId = async (): Promise<number | undefined> => {
+        const meta = await sheets.spreadsheets.get({ spreadsheetId: this.SPREADSHEET_ID });
+        return (
+          meta.data.sheets?.find((s) => s.properties?.title === sheetTitle)?.properties?.sheetId ??
+          undefined
+        );
+      };
 
-      // Extract the new sheet ID from the response
-      const newSheetId = createResponse.data.replies?.[0]?.addSheet?.properties?.sheetId;
+      let newSheetId: number | undefined;
+      let existed = false;
+      try {
+        newSheetId = await findId();
+        existed = newSheetId != null;
+      } catch {
+        newSheetId = undefined;
+      }
+
+      if (newSheetId == null) {
+        try {
+          const createResponse = await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: this.SPREADSHEET_ID,
+            requestBody: { requests: [{ addSheet: { properties: { title: sheetTitle } } }] },
+          });
+          newSheetId = createResponse.data.replies?.[0]?.addSheet?.properties?.sheetId ?? undefined;
+        } catch {
+          // addSheet fails if the tab actually exists (e.g. the lookup above failed
+          // transiently). Fall through to a re-lookup so we reuse rather than crash.
+        }
+        if (newSheetId == null) {
+          // Reply lacked the id, OR the tab already existed — re-fetch to resolve it.
+          newSheetId = await findId();
+          existed = newSheetId != null;
+        }
+      }
+
+      if (newSheetId == null) {
+        throw new Error(`Could not resolve sheetId for ${sheetTitle}`);
+      }
+      if (existed) {
+        // Reuse: clear values (preserves the gid so calendar links stay valid).
+        await sheets.spreadsheets.values.clear({
+          spreadsheetId: this.SPREADSHEET_ID,
+          range: sheetTitle,
+        });
+      }
 
       // Build all rows
       const rows: (string | number)[][] = [];
@@ -452,7 +486,7 @@ export class GoogleSheetsService {
       // Row 3: blank
       rows.push([]);
       // Row 4: Headers
-      rows.push(['Exercise', 'Set', 'Last Time', 'Weight', 'Reps', 'Done']);
+      rows.push(['Exercise', 'Set', 'Target', 'Last time', 'Weight', 'Reps', 'Done']);
       // Row 5: blank
       rows.push([]);
 
@@ -463,9 +497,10 @@ export class GoogleSheetsService {
           rows.push([
             s === 1 ? ex.name : '',
             s,
+            ex.targetWeight ? String(ex.targetWeight) + (ex.targetReps ? ' × ' + ex.targetReps : '') : '',
             '-',
-            ex.targetWeight || '',
-            ex.targetReps || '',
+            '',
+            '',
             '',
           ]);
         }
@@ -513,7 +548,7 @@ export class GoogleSheetsService {
                     startRowIndex: 3,
                     endRowIndex: 4,
                     startColumnIndex: 0,
-                    endColumnIndex: 6,
+                    endColumnIndex: 7,
                   },
                   cell: {
                     userEnteredFormat: {
@@ -805,7 +840,7 @@ export class GoogleSheetsService {
     try {
       const sheets = await this.getSheetsClient();
       const sheetTitle = `Workout_${date}`;
-      const range = `${sheetTitle}!A1:F100`;
+      const range = `${sheetTitle}!A1:G100`;
 
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.SPREADSHEET_ID,
@@ -837,10 +872,11 @@ export class GoogleSheetsService {
 
         const name = row[0]?.trim() || '';
         const set = parseInt(row[1]) || 0;
-        const lastTime = row[2] || '';
-        const weight = row[3] || '';
-        const reps = row[4] || '';
-        const done = row[5] || '';
+        const target = row[2] || '';
+        const lastTime = row[3] || '';
+        const weight = row[4] || '';
+        const reps = row[5] || '';
+        const done = row[6] || '';
 
         if (name) {
           // New exercise
@@ -849,10 +885,10 @@ export class GoogleSheetsService {
           }
           currentExercise = {
             name,
-            sets: [{ set, lastTime, weight, reps, done }],
+            sets: [{ set, target, lastTime, weight, reps, done }],
           };
         } else if (currentExercise && set > 0) {
-          currentExercise.sets.push({ set, lastTime, weight, reps, done });
+          currentExercise.sets.push({ set, target, lastTime, weight, reps, done });
         }
       }
       if (currentExercise) {
@@ -881,6 +917,7 @@ export interface WorkoutSheetExercise {
   name: string;
   sets: {
     set: number;
+    target: string;
     lastTime: string;
     weight: string;
     reps: string;

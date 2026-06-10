@@ -1,0 +1,144 @@
+import cron, { type ScheduledTask } from 'node-cron';
+import { config } from '../config.js';
+import { logger } from '../logger.js';
+import { JsonStore } from '../state/jsonStore.js';
+import { todayStr } from '../util/time.js';
+import { tryReserveProactive } from './proactiveState.js';
+import { appendDailyLog } from '../memory/store.js';
+import { runMorningRitual } from './morningRitual.js';
+import { runMidMorningCheck, runAfternoonCheck, runEveningCheck, runProteinCheck, type CheckinResult } from './checkins.js';
+import { runDailyCuration } from '../memory/curation.js';
+import { runSelfHeal } from './selfHeal.js';
+import { runMaintenanceReport } from './maintenance.js';
+import { runWeeklyReview } from './weeklyReview.js';
+import { syncBodyComp } from './bodyCompSync.js';
+import { runDailyClose } from './dailyClose.js';
+import { runCostReport } from './costReport.js';
+
+/**
+ * Registers all scheduled jobs (the ported OpenClaw cron set). Each job decides
+ * silently (LLM-free where possible); only sends through the gate + delivery queue.
+ */
+
+export interface JobDeps {
+  deliver: (text: string) => Promise<void>;
+}
+
+const ritualState = new JsonStore<{ lastBriefingDay: string }>('ritual-state.json', {
+  lastBriefingDay: '',
+});
+
+// One-shot: a few days after chat moved to Sonnet, send a real cost check-in.
+const COST_REPORT_AFTER = '2026-06-14';
+const costReportState = new JsonStore<{ sent: boolean }>('cost-report-state.json', { sent: false });
+
+const tzOpt = { timezone: config.tz } as const;
+
+/** Returns true if the message was actually reserved + delivered. */
+async function emit(type: string, message: string, deps: JobDeps, opts = {}): Promise<boolean> {
+  const gate = await tryReserveProactive(type, opts);
+  if (!gate.allowed) {
+    logger.info({ type, reason: gate.reason }, 'Proactive message suppressed by gate');
+    return false;
+  }
+  await deps.deliver(message);
+  await appendDailyLog(todayStr(config.tz), `[proactive:${type}] ${message}`);
+  return true;
+}
+
+// In-process guard so a slow 5:15 run can't overlap with the 7:00 fallback (or a
+// duplicate fire) and produce two briefings / two workout sheets in one day.
+let morningRunning = false;
+
+async function morningRitualJob(deps: JobDeps, isFallback = false): Promise<void> {
+  const today = todayStr(config.tz);
+  const st = await ritualState.read();
+  if (st.lastBriefingDay === today) {
+    logger.info({ isFallback }, 'Morning briefing already sent today, skipping');
+    return;
+  }
+  if (morningRunning) {
+    logger.info({ isFallback }, 'Morning ritual already running, skipping duplicate');
+    return;
+  }
+  morningRunning = true;
+  try {
+    const res = await runMorningRitual();
+    if (!res.sent || !res.message) {
+      logger.info({ reason: res.reason, isFallback }, 'Morning ritual produced no message');
+      return;
+    }
+    // Scheduled briefing: bypass quiet hours + cooldown (once-daily wake message).
+    const delivered = await emit('morning-briefing', res.message, deps, {
+      ignoreQuietHours: true,
+      ignoreCooldown: true,
+    });
+    // Only mark the day done if we actually delivered, so a suppressed/failed run
+    // leaves the 7:00 fallback free to retry.
+    if (delivered) {
+      await ritualState.update((s) => {
+        s.lastBriefingDay = today;
+      });
+    }
+  } finally {
+    morningRunning = false;
+  }
+}
+
+async function checkinJob(type: string, run: () => Promise<CheckinResult>, deps: JobDeps): Promise<void> {
+  const res = await run();
+  if (res.sent && res.message) {
+    await emit(type, res.message, deps);
+  } else {
+    logger.info({ type, reason: res.reason }, 'Check-in stayed silent');
+  }
+}
+
+export function registerJobs(deps: JobDeps): ScheduledTask[] {
+  const tasks: ScheduledTask[] = [];
+  const guard = (name: string, fn: () => Promise<void>) => async () => {
+    try {
+      logger.info({ job: name }, 'Job firing');
+      await fn();
+    } catch (err) {
+      logger.error({ err, job: name }, 'Job threw (contained)');
+    }
+  };
+
+  // M–F 5:15 AM — morning ritual (headline).
+  tasks.push(cron.schedule('15 5 * * 1-5', guard('morning-5:15', () => morningRitualJob(deps)), tzOpt));
+  // M–F 7:00 AM — fallback if 5:15 found stale data.
+  tasks.push(cron.schedule('0 7 * * 1-5', guard('morning-fallback-7:00', () => morningRitualJob(deps, true)), tzOpt));
+  // M–F 10:30 AM — mid-morning.
+  tasks.push(cron.schedule('30 10 * * 1-5', guard('mid-morning-10:30', () => checkinJob('mid-morning', runMidMorningCheck, deps)), tzOpt));
+  // M–F 3:30 PM — afternoon.
+  tasks.push(cron.schedule('30 15 * * 1-5', guard('afternoon-15:30', () => checkinJob('afternoon', runAfternoonCheck, deps)), tzOpt));
+  // Daily 7:30 PM — protein nudge (only if behind target).
+  tasks.push(cron.schedule('30 19 * * *', guard('protein-19:30', () => checkinJob('protein-evening', runProteinCheck, deps)), tzOpt));
+  // Daily 8:30 PM — evening (high bar).
+  tasks.push(cron.schedule('30 20 * * *', guard('evening-20:30', () => checkinJob('evening', runEveningCheck, deps)), tzOpt));
+  // Sunday 8:00 AM — weekly review (the data-rich coaching message).
+  tasks.push(cron.schedule('0 8 * * 0', guard('weekly-review', () => checkinJob('weekly-review', runWeeklyReview, deps)), tzOpt));
+  // Daily 11:59 PM — deterministic close: ingest the day's actual completed sets
+  // into WORKOUT_DATABASE + flag data gaps (NO LLM, NO Telegram).
+  tasks.push(cron.schedule('59 23 * * *', guard('daily-close-23:59', () => runDailyClose()), tzOpt));
+  // Daily 9:00 AM — one-shot cost check-in (fires once on/after COST_REPORT_AFTER).
+  tasks.push(cron.schedule('0 9 * * *', guard('cost-report', async () => {
+    if ((await costReportState.read()).sent) return;
+    if (todayStr(config.tz) < COST_REPORT_AFTER) return;
+    const sent = await runCostReport(deps.deliver);
+    if (sent) await costReportState.update((s) => { s.sent = true; });
+  }), tzOpt));
+  // Daily 6:00 AM — sync latest Withings reading into BODY_COMPOSITION (silent).
+  tasks.push(cron.schedule('0 6 * * *', guard('bodycomp-sync', () => syncBodyComp().then(() => undefined)), tzOpt));
+  // Daily 3:30 AM — memory curation.
+  tasks.push(cron.schedule('30 3 * * *', guard('curation-3:30', () => runDailyCuration()), tzOpt));
+  // Hourly — self-heal: verify bridge + provider auth; alert (one-tap re-auth) on a real break.
+  // Delivers directly (system alert, not coaching) — it has its own 24h-per-issue throttle.
+  tasks.push(cron.schedule('0 * * * *', guard('self-heal', () => runSelfHeal(deps.deliver)), tzOpt));
+  // Weekly Sun 4:00 AM — dependency security/maintenance report (only pings if findings).
+  tasks.push(cron.schedule('0 4 * * 0', guard('maintenance', () => runMaintenanceReport(deps.deliver)), tzOpt));
+
+  logger.info({ count: tasks.length, tz: config.tz }, 'Scheduled jobs registered');
+  return tasks;
+}

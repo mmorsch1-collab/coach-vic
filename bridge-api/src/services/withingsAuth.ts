@@ -2,6 +2,7 @@ import axios from 'axios';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { tokenStorage, TokenData } from '../storage/tokenStorage.js';
+import { withRefreshLock, isInvalidGrantError, RetryableRefreshError } from './refreshGuard.js';
 
 /**
  * Withings OAuth2 service
@@ -105,75 +106,103 @@ export class WithingsAuthService {
   }
 
   /**
-   * Refresh access token using refresh token
+   * Refresh access token using refresh token.
+   *
+   * Withings issues SINGLE-USE refresh tokens that rotate on every refresh, so:
+   *  - runs under a per-provider single-flight lock so concurrent callers don't
+   *    each consume the (now rotated) refresh token and race each other;
+   *  - on transient failures (network/timeout/5xx/429, or a non-auth Withings
+   *    status) it KEEPS the stored tokens and throws a retryable error. It only
+   *    clears tokens when Withings explicitly reports an invalid/expired grant.
+   *
+   * Note: Withings returns HTTP 200 with an application-level `status` field;
+   * status 401 means the token is dead. We synthesize a `response`-shaped error
+   * so the shared classifier (isInvalidGrantError) can inspect that status.
    */
   async refreshAccessToken(): Promise<TokenData> {
-    const storedToken = await tokenStorage.getWithingsToken();
+    return withRefreshLock('withings', async () => {
+      const storedToken = await tokenStorage.getWithingsToken();
 
-    if (!storedToken || !storedToken.refreshToken) {
-      logger.warn('No Withings refresh token available, clearing tokens');
-      await tokenStorage.deleteWithingsToken();
-      throw new Error(
-        'No Withings refresh token available. Please re-authenticate via /auth/withings/start'
-      );
-    }
-
-    try {
-      logger.info('Refreshing Withings access token');
-
-      const params = {
-        action: 'requesttoken',
-        grant_type: 'refresh_token',
-        client_id: config.withings.clientId,
-        client_secret: config.withings.clientSecret,
-        refresh_token: storedToken.refreshToken,
-      };
-
-      const response = await axios.post(this.WITHINGS_TOKEN_URL, params, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const { body, status } = response.data;
-
-      if (status !== 0) {
-        throw new Error(`Withings API error: status ${status}`);
+      if (!storedToken || !storedToken.refreshToken) {
+        logger.warn('No Withings refresh token available, clearing tokens');
+        await tokenStorage.deleteWithingsToken();
+        throw new Error(
+          'No Withings refresh token available. Please re-authenticate via /auth/withings/start'
+        );
       }
 
-      const { access_token, refresh_token, expires_in, userid } = body;
+      try {
+        logger.info('Refreshing Withings access token');
 
-      if (!access_token || !refresh_token) {
-        throw new Error('Withings refresh response missing tokens');
+        const params = {
+          action: 'requesttoken',
+          grant_type: 'refresh_token',
+          client_id: config.withings.clientId,
+          client_secret: config.withings.clientSecret,
+          refresh_token: storedToken.refreshToken,
+        };
+
+        const response = await axios.post(this.WITHINGS_TOKEN_URL, params, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const { body, status } = response.data;
+
+        if (status !== 0) {
+          // Surface the Withings application-level status in a response-shaped
+          // error so the classifier can tell a dead grant (401) from a
+          // transient failure.
+          const apiError: any = new Error(`Withings API error: status ${status}`);
+          apiError.response = { status: 200, data: response.data };
+          throw apiError;
+        }
+
+        const { access_token, refresh_token, expires_in, userid } = body;
+
+        if (!access_token || !refresh_token) {
+          throw new Error('Withings refresh response missing tokens');
+        }
+
+        const tokenData: TokenData = {
+          accessToken: access_token,
+          refreshToken: refresh_token,
+          expiryDate: Date.now() + expires_in * 1000,
+          scope: storedToken.scope,
+          tokenType: 'Bearer',
+          userId: userid.toString(),
+        };
+
+        await tokenStorage.setWithingsToken(tokenData);
+        logger.info('Withings access token refreshed successfully');
+
+        return tokenData;
+      } catch (error: any) {
+        const errorMessage = error.response?.data?.body?.error || error.message;
+
+        // Only nuke tokens on a permanent invalid_grant. Transient errors
+        // (network/timeout/5xx/429/rotation race) keep tokens for retry.
+        if (isInvalidGrantError(error)) {
+          logger.error(
+            { err: error.response?.data || error, errorMessage },
+            'Withings refresh rejected (invalid grant), clearing stored tokens'
+          );
+          await tokenStorage.deleteWithingsToken();
+          throw new Error(
+            `Withings token refresh failed: ${errorMessage}. Please re-authenticate via /auth/withings/start`
+          );
+        }
+
+        logger.warn(
+          { err: error.response?.data || error, errorMessage },
+          'Withings refresh failed transiently, keeping tokens for retry'
+        );
+        throw new RetryableRefreshError(
+          `Withings token refresh failed transiently: ${errorMessage}`
+        );
       }
-
-      const tokenData: TokenData = {
-        accessToken: access_token,
-        refreshToken: refresh_token,
-        expiryDate: Date.now() + expires_in * 1000,
-        scope: storedToken.scope,
-        tokenType: 'Bearer',
-        userId: userid.toString(),
-      };
-
-      await tokenStorage.setWithingsToken(tokenData);
-      logger.info('Withings access token refreshed successfully');
-
-      return tokenData;
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.body?.error || error.message;
-      logger.error(
-        { err: error.response?.data || error, errorMessage },
-        'Failed to refresh Withings access token, clearing stored tokens'
-      );
-
-      // Clear invalid tokens to force re-authentication
-      await tokenStorage.deleteWithingsToken();
-
-      throw new Error(
-        `Withings token refresh failed: ${errorMessage}. Please re-authenticate via /auth/withings/start`
-      );
-    }
+    });
   }
 
   /**

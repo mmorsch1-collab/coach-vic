@@ -3,6 +3,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { tokenStorage, TokenData } from '../storage/tokenStorage.js';
+import { withRefreshLock, isInvalidGrantError, RetryableRefreshError } from './refreshGuard.js';
 
 /**
  * Google OAuth2 service
@@ -84,9 +85,19 @@ export class GoogleAuthService {
    * Save tokens to storage
    */
   private async saveTokens(tokens: any): Promise<void> {
+    // Google's refresh response usually returns a new access_token but NOT a new
+    // refresh_token. If we naively saved tokens.refresh_token (undefined) we'd
+    // wipe the stored refresh token and force re-auth. Preserve the existing one
+    // when the payload omits it.
+    let refreshToken: string | undefined = tokens.refresh_token ?? undefined;
+    if (!refreshToken) {
+      const existing = await tokenStorage.getGoogleToken();
+      refreshToken = existing?.refreshToken;
+    }
+
     const tokenData: TokenData = {
       accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
+      refreshToken: refreshToken ?? '',
       expiryDate: tokens.expiry_date || Date.now() + 3600 * 1000,
       scope: tokens.scope || this.SCOPES.join(' '),
       tokenType: tokens.token_type || 'Bearer',
@@ -133,15 +144,36 @@ export class GoogleAuthService {
     const credentials = this.oauth2Client.credentials;
     if (credentials.expiry_date && credentials.expiry_date < Date.now() + 5 * 60 * 1000) {
       logger.info('Access token expired or expiring soon, refreshing');
-      try {
-        const { credentials: newCredentials } = await this.oauth2Client.refreshAccessToken();
-        this.oauth2Client.setCredentials(newCredentials);
-        await this.saveTokens(newCredentials);
-        logger.info('Access token refreshed successfully');
-      } catch (error: any) {
-        logger.error({ err: error }, 'Failed to refresh access token');
-        throw new Error('Failed to refresh access token. Please re-authenticate.');
-      }
+      // Single-flight: only one Google refresh runs at a time so the background
+      // refresher and an on-demand request don't both refresh concurrently.
+      await withRefreshLock('google', async () => {
+        // Re-read storage INSIDE the lock: if another caller refreshed while we
+        // waited for the lock, our in-memory credentials hold the now-consumed
+        // refresh token. Reload and re-check expiry before refreshing again.
+        await this.loadStoredTokens();
+        const cur = this.oauth2Client.credentials;
+        if (cur.expiry_date && cur.expiry_date >= Date.now() + 5 * 60 * 1000) {
+          logger.info('Google token already refreshed by another caller; skipping');
+          return;
+        }
+        try {
+          const { credentials: newCredentials } = await this.oauth2Client.refreshAccessToken();
+          this.oauth2Client.setCredentials(newCredentials);
+          await this.saveTokens(newCredentials);
+          logger.info('Access token refreshed successfully');
+        } catch (error: any) {
+          // Keep tokens on transient failures (network/timeout/5xx/429) and
+          // surface a retryable error. Only an explicit invalid_grant means the
+          // user must re-authenticate. NOTE: we intentionally do NOT delete the
+          // stored Google token here — re-auth via /auth/google/start overwrites it.
+          if (isInvalidGrantError(error)) {
+            logger.error({ err: error }, 'Google refresh rejected (invalid_grant)');
+            throw new Error('Failed to refresh access token. Please re-authenticate.');
+          }
+          logger.warn({ err: error }, 'Google refresh failed transiently, keeping tokens for retry');
+          throw new RetryableRefreshError('Google token refresh failed transiently');
+        }
+      });
     }
 
     return this.oauth2Client;
