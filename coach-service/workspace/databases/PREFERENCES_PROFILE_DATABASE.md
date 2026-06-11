@@ -130,6 +130,7 @@
 - **Strength:** Strong (locked in primary goal)
 - **Notes:** 8-9 week timeline, simple deficit approach, no macro obsessing, skip legs (already proportioned), 4-day upper body + cardio
 - **Last_Updated:** 2026-02-22
+- **SUPERSEDED (2026-06-10):** retired — current goal is ~10% BF recomposition (GOAL.md); legs at maintenance volume, not skipped.
 
 ### PREF_015: WHOOP VP Demo Purpose
 - **Category:** goals  
@@ -137,6 +138,7 @@
 - **Strength:** Strong (this is the primary mission)
 - **Notes:** System serves as living demo for VP of Product (AI) application
 - **Last_Updated:** 2026-02-18
+- **SUPERSEDED (2026-06-10):** retired ("that ship has sailed") — Vic is a calm health coach; no demo framing.
 ## pref_008 — Core Work for Lower Back
 **Category:** injury_prevention / warm-up
 **Preference:** Requires consistent core work (6-min plank routine: 1min standard, 1min left side, 1min right side, repeat without rest) at the start of every session

@@ -6,7 +6,8 @@
 - **Timezone:** America/New_York (Eastern)
 
 ## Physical profile
-- 6'0", ~160 lbs, athletic/slim build, ~12% body fat.
+- 6'0", athletic/slim build. ~152 lbs, ~11.4% BF as of 2026-06-10 — but ALWAYS use the live
+  numbers from the snapshot/get_bodycomp_trend, not this line.
 - **Primary goal: body recomposition to ~10% body fat** — lose fat while preserving/adding
   lean muscle. See GOAL.md. (Supersedes the old "vacation cut by April 22" goal, which is done.)
 - Chest is the priority/weak point; legs are already well-proportioned.
@@ -30,7 +31,7 @@ matched to the current split. See HOME_GYM.md.
 - **Google Calendar + Sheets:** schedule context; canonical coaching spreadsheet.
 
 ## Nutrition
-- Protein-forward, whole foods; casual tracking (text descriptions, not photos/macros).
+- Protein-forward, whole foods; casual tracking (text descriptions or meal photos — no macros).
 - Shares meals for accountability — connect nutrition to body-comp trends.
 
 ## Supplements & caffeine

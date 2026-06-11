@@ -1,5 +1,8 @@
 import { runTurn } from '../llm/agent.js';
 import { logger } from '../logger.js';
+import { isSkip } from './sentinel.js';
+import { addDaysStr, todayStr } from '../util/time.js';
+import { config } from '../config.js';
 
 /**
  * Sunday weekly review — the one data-rich coaching message of the week. Pulls
@@ -7,10 +10,18 @@ import { logger } from '../logger.js';
  * detections (plateau, too-fast loss, muscle-loss, low adherence).
  */
 export async function runWeeklyReview(): Promise<{ sent: boolean; message?: string; reason?: string }> {
+  const today = todayStr(config.tz);
+  const weekDates = Array.from({ length: 7 }, (_, i) => addDaysStr(today, -(7 - i))); // Sun..Sat
+
   const instruction = [
     `Weekly review for Matt (Sunday). You have the COACHING SNAPSHOT in context. Use tools as needed:`,
     `get_muscle_volume (weekly hard sets vs landmarks), get_bodycomp_trend (weight/BF% slope),`,
     `get_whoop_history (recovery trend), get_exercise_progression for any key lift, get_goals.`,
+    ``,
+    `This week's daily logs exist for: ${weekDates.join(', ')}. Use recall_day on the 2-3 days that`,
+    `matter (training days, days Matt raised something) — or search_memory — so the review reflects`,
+    `what actually happened and was SAID this week, not just the numbers. Watch for [pr] lines`,
+    `(new e1RM PRs) and call them out by name.`,
     ``,
     `Assess and report concisely (this is the week's one data-rich message):`,
     `1. Training: which lifts progressed (e1RM), which stalled (flag a plateau if e1RM flat 3+ sessions),`,
@@ -35,7 +46,7 @@ export async function runWeeklyReview(): Promise<{ sent: boolean; message?: stri
       maxIterations: 12,
     });
     const message = r.text.trim();
-    if (!message || message.toUpperCase() === 'SKIP') return { sent: false, reason: 'nothing worth a review' };
+    if (isSkip(message)) return { sent: false, reason: 'nothing worth a review' };
     return { sent: true, message };
   } catch (err: any) {
     logger.error({ err }, 'Weekly review failed');

@@ -148,3 +148,14 @@
 If neither exists, say "placeholder, confirm your working weight" or ask outright. A false target undermines credibility and derails the entire session plan.
 
 **The fix:** Matt caught it, corrected once, and asked me to codify the rule. Documented in WORKOUT_PROTOCOL.md and MEMORY.md. This is now non-negotiable.
+
+## ci_024 — Protein tracking + accountability loop works
+Matt asked about protein mid-day (10:59 AM), got a concrete gap (55g remaining), and then tracked meals throughout the day with real foods (Greek yogurt, shake, turkey/cheese, wings, cottage cheese). Hit 164/165g by end of day — one gram short of target.
+
+**What worked:** 
+- Real-time snapshot showing running total (not re-summed from memory).
+- Concrete "X grams remaining" framing.
+- Evening nudge with actionable fixes (protein powder + dinner).
+- Matt self-reported meals without being prompted beyond the initial "what's on the menu?" 
+
+This is the casual-but-accountable model that fits his style. Keep leveraging the running daily total from the snapshot; it motivates without nagging.

@@ -21,7 +21,7 @@ const store = new JsonStore<ProactiveState>('proactive-state.json', {
   lastNudgeMsByType: {},
 });
 
-function inQuietHours(): boolean {
+export function inQuietHours(): boolean {
   const h = hourInTz(config.tz);
   const { quietHoursStart: s, quietHoursEnd: e } = config;
   // Window may wrap midnight (e.g., 21 → 6).
@@ -38,6 +38,34 @@ export interface GateOptions {
   ignoreQuietHours?: boolean;
   /** Bypass the per-type cooldown (e.g. the once-daily morning briefing). */
   ignoreCooldown?: boolean;
+}
+
+/**
+ * Read-only gate peek — same checks as tryReserveProactive but reserves NOTHING.
+ * Call this BEFORE composing (LLM spend) so a message that the gate would
+ * suppress is never composed at all. Still call tryReserveProactive afterwards:
+ * the peek is advisory; the reserve is the atomic check.
+ */
+export async function wouldAllowProactive(type: string, opts: GateOptions = {}): Promise<GateResult> {
+  if (!config.proactiveEnabled) return { allowed: false, reason: 'proactive disabled' };
+  if (!opts.ignoreQuietHours && inQuietHours()) return { allowed: false, reason: 'quiet hours' };
+
+  const today = todayStr(config.tz);
+  const st = await store.read();
+  const sentToday = st.day === today ? st.sentToday : 0;
+  if (sentToday >= config.maxProactivePerDay) {
+    return { allowed: false, reason: `daily cap (${config.maxProactivePerDay}) reached` };
+  }
+  if (!opts.ignoreCooldown) {
+    const since = minutesSince(st.lastNudgeMsByType[type]);
+    if (since < config.nudgeCooldownMinutes) {
+      return {
+        allowed: false,
+        reason: `cooldown for "${type}" (${Math.round(since)}m < ${config.nudgeCooldownMinutes}m)`,
+      };
+    }
+  }
+  return { allowed: true };
 }
 
 /**

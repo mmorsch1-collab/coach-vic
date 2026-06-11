@@ -28,22 +28,10 @@ export async function syncBodyComp(backfillDays = 10): Promise<{ synced: number;
 
   const toAppend: unknown[][] = [];
 
-  // Weight per recent day (weight-history).
-  try {
-    const hist = (await bridge.withingsHistory(backfillDays)) as Array<{ date: string; weight: { lbs: number } }>;
-    for (const h of hist || []) {
-      const dt = todayStr(config.tz, new Date(h.date));
-      if (!have.has(dt) && h.weight?.lbs != null) {
-        toAppend.push([dt, round(h.weight.lbs, 1), '', '', '', '', 'auto-sync (Withings)']);
-        have.add(dt);
-      }
-    }
-  } catch (err) {
-    logger.warn({ err }, 'BodyComp sync: weight-history fetch failed');
-  }
-
-  // Latest reading WITH body composition (summary) — overrides the weight-only row
-  // for its date by appending a fuller row only if that date wasn't already added.
+  // FULLER ROW FIRST: the latest reading WITH body composition (summary). This
+  // must run before the weight-only backfill — otherwise the weight-history loop
+  // claims the same date with a BF-less row and starves the snapshot's body-fat
+  // trend (the #1 stop-cutting signal) for days.
   try {
     const s = (await bridge.withingsSummary()) as Record<string, any>;
     if (s?.weightLbs != null) {
@@ -63,6 +51,20 @@ export async function syncBodyComp(backfillDays = 10): Promise<{ synced: number;
     }
   } catch (err) {
     logger.warn({ err }, 'BodyComp sync: summary fetch failed');
+  }
+
+  // Weight per recent day (weight-history) — backfill for any remaining days.
+  try {
+    const hist = (await bridge.withingsHistory(backfillDays)) as Array<{ date: string; weight: { lbs: number } }>;
+    for (const h of hist || []) {
+      const dt = todayStr(config.tz, new Date(h.date));
+      if (!have.has(dt) && h.weight?.lbs != null) {
+        toAppend.push([dt, round(h.weight.lbs, 1), '', '', '', '', 'auto-sync (Withings)']);
+        have.add(dt);
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, 'BodyComp sync: weight-history fetch failed');
   }
 
   if (!toAppend.length) return { synced: 0, reason: 'nothing new to sync' };

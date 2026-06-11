@@ -32,7 +32,9 @@
 
 ## Cardio Option
 - 20 min Peloton ride
-- Low/moderate on yellow days, HIIT intervals on green days
+- **During the cut: Zone-2 / low-moderate only** (plus daily steps). Hard HIIT intervals are a
+  maintenance-phase tool — in a deficit they tax the same recovery the lifting needs, for little
+  extra fat loss (see GOAL.md: "Hard intervals only at maintenance").
 
 ## Coaching Notes
 - These complement the full gym sessions, not replace them

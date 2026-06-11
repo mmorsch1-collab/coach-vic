@@ -5,7 +5,9 @@ Matt has.** Matt is a low hypertrophy responder, so the lever is *reveal* (get l
 not bulk. He's already lean, so the gap is small (~a few lb of fat).
 
 ## Phase: MINI-CUT (mild) → then MAINTAIN
-- **Rate of loss:** ~0.5%/wk (≈0.5–0.75 lb/wk). Hard ceiling 1%/wk — faster = muscle loss.
+- **Rate of loss:** ~0.5%/wk of bodyweight (≈0.7–0.8 lb/wk at ~152 lb). Slow toward ~0.5 lb/wk
+  as 10% BF approaches — the leaner he gets, the slower the cut should run to protect muscle.
+  Hard ceiling 1%/wk — faster = muscle loss.
 - **Deficit:** small (~300–400 kcal). Food drives it; steps (8–10k/day) + light Zone-2 Peloton are
   the dial. Hard intervals only at maintenance.
 - **Protein (the one number to hit):** **~1.0–1.2 g/lb ≈ 165 g/day.** Anchor every meal with a

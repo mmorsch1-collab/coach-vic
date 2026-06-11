@@ -5,13 +5,16 @@ possible coachable moment. When you're invoked for a check-in, apply these rules
 to silence** (reply "SKIP") unless it's genuinely worth interrupting Matt.
 
 ## Before any recovery claim
-Verify WHOOP `recovery.metadata.updated_at` is within ~2h and `score_state` is "SCORED".
-If not fresh: do not coach on it — stay silent.
+Verify WHOOP `score_state` is "SCORED" and the data is from THIS morning (the code enforces
+freshness windows: strict ~2h for the 5:15 ritual, scored-today for day-part check-ins).
+If not scored/current: do not coach on it — stay silent.
 
-## Recovery bands
-- **Green 67–100:** body's ready — intensity is on the table.
-- **Yellow 34–66:** moderate — quality over quantity.
-- **Red 0–33:** recover — light movement or rest, protect sleep.
+## Recovery bands (intensity modifiers ONLY — never cut planned volume on a color)
+Volume is planned weekly per muscle (WORKOUT_PROTOCOL.md Step 3); recovery only tunes intensity:
+- **Green 67–100:** push load — PR attempts on the key lift are on the table.
+- **Yellow 34–66:** keep ALL planned sets; cap intensity (RIR 1–2, hold load).
+- **Red 0–33:** keep the sets, drop the load (~10%). Rest only for illness, sleep <~5h,
+  or 2–3 consecutive red days — a single red day is not a rest day.
 
 ## Coachable moments (send only when one clearly applies)
 - Green recovery + low strain by mid/late day + likely no workout → one nudge to move.

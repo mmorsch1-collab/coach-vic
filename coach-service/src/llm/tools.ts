@@ -1,15 +1,22 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { bridge } from '../bridge/client.js';
-import { appendDailyLog, appendMemoryMd, editBrainFile, EDITABLE_BRAIN_FILES } from '../memory/store.js';
+import {
+  appendDailyLog,
+  appendMemoryMd,
+  editBrainFile,
+  EDITABLE_BRAIN_FILES,
+  readDailyLog,
+  searchDailyLogs,
+} from '../memory/store.js';
 import { invalidateSystemCache } from './systemPrompt.js';
 import { appendEntry, DB_FILES, type DbFile } from '../memory/databases.js';
 import { todayStr } from '../util/time.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
-import { e1rm, exerciseSeries, parseWorkoutDb, weeklyHardSets, slopePerWeek, VOLUME_BANDS } from '../coaching/metrics.js';
+import { e1rm, exerciseSeries, parseWorkoutDb, weeklyHardSets, slopePerWeek, VOLUME_BANDS, bestE1rmBefore } from '../coaching/metrics.js';
 import { invalidateSnapshot } from '../coaching/snapshot.js';
 import { logMeal, PROTEIN_TARGET_G } from '../coaching/nutrition.js';
-import { ingestWorkout } from '../coaching/workoutIngest.js';
+import { ingestWorkout, annotateCompletion } from '../coaching/workoutIngest.js';
 
 /**
  * Tools Coach Vic can call. Bridge tools = read/write health data; memory tools =
@@ -68,8 +75,10 @@ export const TOOLS: Anthropic.Tool[] = [
     name: 'create_workout',
     description:
       'Create the daily workout sheet (tab Workout_YYYY-MM-DD in the canonical spreadsheet) and ' +
-      'return its URL. Follow WORKOUT_PROTOCOL.md: recovery-appropriate, goal-aligned, with ' +
-      'Target columns and Last-Time references.',
+      'return its URL. The sheet PREFILLS Weight/Reps with your targets and adds a Done checkbox ' +
+      'per set — Matt just ticks Done when he executes as written, so targets must be REAL ' +
+      'numbers grounded in get_exercise_progression (never guessed). For a lift with no history, ' +
+      'OMIT targetWeight (Weight stays blank for Matt to establish the baseline).',
     input_schema: {
       type: 'object',
       properties: {
@@ -83,8 +92,12 @@ export const TOOLS: Anthropic.Tool[] = [
             properties: {
               name: { type: 'string' },
               sets: { type: 'integer', description: 'Number of sets, 1-20.' },
-              targetReps: { type: 'integer', description: 'Target reps per set.' },
-              targetWeight: { type: 'string', description: 'Target weight as text, e.g. "45 lb" or "BW".' },
+              targetReps: { type: 'integer', description: 'Target reps per set (prefilled into Reps).' },
+              targetWeight: {
+                type: 'string',
+                description:
+                  'Target weight, e.g. "100" or "BW" — prefilled into Weight. OMIT when the lift has no logged history.',
+              },
               notes: { type: 'string' },
             },
             required: ['name', 'sets'],
@@ -119,9 +132,10 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'get_workout',
     description:
-      'Read a workout sheet for a given date (parsed), INCLUDING the Actual Weight/Reps columns ' +
-      'Matt has filled in. Use to review a completed session, discuss a key lift, or reference ' +
-      'last time for progressive overload.',
+      'Read a workout sheet for a given date (parsed). Each set has a `completed` flag: on current ' +
+      'sheets Weight/Reps are PREFILLED with the plan and Matt ticks the Done checkbox (numbers as ' +
+      'shown = what he did; he edits them only when he deviated). Never ask him to do more than ' +
+      'tick the box. Use to review a session, discuss a key lift, or ground progressive overload.',
     input_schema: {
       type: 'object',
       properties: { date: { type: 'string', description: 'YYYY-MM-DD of the workout.' } },
@@ -139,7 +153,8 @@ export const TOOLS: Anthropic.Tool[] = [
     name: 'read_sheet',
     description:
       'Read raw rows from a tab in the canonical spreadsheet (optionally an A1 range). Use before ' +
-      'editing so you know the exact row/column layout.',
+      'editing so you know the exact row/column layout. For WORKOUT_DATABASE history/trends use ' +
+      'get_exercise_progression / get_muscle_volume instead — do NOT dump the whole database.',
     input_schema: {
       type: 'object',
       properties: {
@@ -221,6 +236,9 @@ export const TOOLS: Anthropic.Tool[] = [
         set1: { type: 'number', description: 'Reps set 1.' },
         set2: { type: 'number', description: 'Reps set 2.' },
         set3: { type: 'number', description: 'Reps set 3.' },
+        set4: { type: 'number', description: 'Reps set 4 (if done).' },
+        set5: { type: 'number', description: 'Reps set 5 (if done).' },
+        set6: { type: 'number', description: 'Reps set 6 (if done).' },
         rir: { type: 'number', description: 'Reps in reserve on the hardest set (0-4).' },
         notes: { type: 'string' },
       },
@@ -250,6 +268,9 @@ export const TOOLS: Anthropic.Tool[] = [
               set1: { type: 'number' },
               set2: { type: 'number' },
               set3: { type: 'number' },
+              set4: { type: 'number' },
+              set5: { type: 'number' },
+              set6: { type: 'number' },
               rir: { type: 'number', description: 'Reps in reserve, hardest set (0-4).' },
               notes: { type: 'string' },
             },
@@ -277,13 +298,16 @@ export const TOOLS: Anthropic.Tool[] = [
     description:
       "Log a meal/snack's protein the MOMENT Matt mentions food. Appends to the deterministic daily " +
       'nutrition log; the running daily total appears in your snapshot every turn, so you never re-sum ' +
-      'from memory or forget an earlier meal. Estimate protein in grams (use the midpoint of a range).',
+      'from memory or forget an earlier meal. Estimate protein in grams (use the midpoint of a range). ' +
+      'IMPORTANT: `date` is the day the food was EATEN — if Matt reports food from a previous day ' +
+      '("yesterday I had…", "last night…"), pass that date so it does NOT count toward today.',
     input_schema: {
       type: 'object',
       properties: {
         protein_g: { type: 'number', description: 'Estimated protein in grams.' },
         food: { type: 'string', description: 'What he ate.' },
         meal: { type: 'string', description: 'breakfast | lunch | dinner | snack (optional).' },
+        date: { type: 'string', description: 'YYYY-MM-DD the food was eaten. Default today; REQUIRED when he reports a previous day.' },
       },
       required: ['protein_g', 'food'],
     },
@@ -349,6 +373,33 @@ export const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'recall_day',
+    description:
+      "Read the raw daily log for a specific past date (conversations, meals, workouts, decisions " +
+      "from that day). Use when Matt references a specific day ('last Tuesday', 'two days ago') or " +
+      'you need exactly what was said/decided on a date. For date-unknown questions use search_memory.',
+    input_schema: {
+      type: 'object',
+      properties: { date: { type: 'string', description: 'YYYY-MM-DD of the day to recall.' } },
+      required: ['date'],
+    },
+  },
+  {
+    name: 'search_memory',
+    description:
+      'Search ALL past daily logs (up to ~60 days) for lines matching a few keywords. Use when ' +
+      "Matt asks about something from the past and you don't know the date ('what did I say about " +
+      "my elbow?', 'when did we change the deload rule?'). Returns matching lines with dates — " +
+      'follow up with recall_day for full context.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: '2-4 specific keywords (e.g. "elbow", "deload barbell").' },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'update_coaching_rule',
     description:
       'Durably change your OWN coaching behavior by editing one of your brain files (rules, ' +
@@ -403,7 +454,7 @@ export async function executeTool(
         // Flat summary (weight + body comp merged) — better for the LLM than raw /latest.
         return json(await bridge.withingsSummary());
       case 'get_withings_history':
-        return json(await bridge.withingsHistory(input?.days ?? 7));
+        return json(await bridge.withingsHistory(clampDays(input?.days, 7)));
       case 'get_strava_latest':
         return json(await bridge.stravaLatest());
       case 'get_calendar_today':
@@ -434,15 +485,27 @@ export async function executeTool(
       case 'get_goals':
         return json(await bridge.getGoals());
       case 'get_workout':
-        return json(await bridge.getWorkout(input.date));
+        // Per-set `completed` under the sheet's contract (Done checkbox on current
+        // sheets; filled Weight+Reps on legacy ones) — raw `done` is stripped.
+        return json(annotateCompletion(await bridge.getWorkout(input.date)));
       case 'list_sheets':
         return json(await bridge.listSheets());
-      case 'read_sheet':
-        return json(await bridge.readSheet(input.title, input.range));
+      case 'read_sheet': {
+        const rows = (await bridge.readSheet(input.title, input.range)) as unknown[][];
+        // Unbounded raw dumps (esp. WORKOUT_DATABASE) grow forever and are re-billed
+        // every loop iteration. With no explicit range, cap to header + last 50 rows.
+        if (!input.range && Array.isArray(rows) && rows.length > 60) {
+          return json({
+            note: `Truncated: showing header + last 50 of ${rows.length} rows. Pass a range for more, or use get_exercise_progression / get_muscle_volume for history.`,
+            rows: [rows[0], ...rows.slice(-50)],
+          });
+        }
+        return json(rows);
+      }
       case 'update_sheet_range':
         return json(await bridge.updateSheetRange(input.title, input.range, input.data ?? []));
       case 'get_whoop_history':
-        return json(await bridge.whoopHistory(input?.days ?? 7));
+        return json(await bridge.whoopHistory(clampDays(input?.days, 7)));
       case 'update_calendar_event':
         return json(
           await bridge.updateCalendarEvent(input.id, {
@@ -458,9 +521,12 @@ export async function executeTool(
         return json(await bridge.deleteCalendarEvent(input.id));
       case 'log_set': {
         const date = input.date || todayStr(config.tz);
-        const reps = [input.set1, input.set2, input.set3].map((n: any) => Number(n)).filter((n) => Number.isFinite(n) && n > 0);
+        const reps = [input.set1, input.set2, input.set3, input.set4, input.set5, input.set6]
+          .map((n: any) => Number(n))
+          .filter((n) => Number.isFinite(n) && n > 0);
         const topReps = reps.length ? Math.max(...reps) : 0;
         const est = Math.round(e1rm(Number(input.weight) || 0, topReps) * 10) / 10;
+        const prNote = await prCheckBefore(input.exercise, date, est);
         await bridge.appendSheet('WORKOUT_DATABASE', [[
           date,
           input.session ?? '',
@@ -472,37 +538,55 @@ export async function executeTool(
           input.notes ?? '',
           input.rir ?? '',
           est || '',
+          input.set4 ?? '',
+          input.set5 ?? '',
+          input.set6 ?? '',
         ]]);
         invalidateSnapshot();
-        return ok(`Logged ${input.exercise} ${input.weight}lb ${reps.join('/')} (e1RM ${est}) to WORKOUT_DATABASE.`);
+        return ok(`Logged ${input.exercise} ${input.weight}lb ${reps.join('/')} (e1RM ${est}) to WORKOUT_DATABASE.${prNote}`);
       }
       case 'log_workout': {
         const date = input.date || todayStr(config.tz);
         const lifts = Array.isArray(input.lifts) ? input.lifts : [];
         if (!lifts.length) return ok('No lifts provided.');
-        const rows = lifts.map((l: any) => {
-          const reps = [l.set1, l.set2, l.set3].map((n: any) => Number(n)).filter((n) => Number.isFinite(n) && n > 0);
+        const prNotes: string[] = [];
+        const rows = [];
+        for (const l of lifts) {
+          const reps = [l.set1, l.set2, l.set3, l.set4, l.set5, l.set6]
+            .map((n: any) => Number(n))
+            .filter((n: number) => Number.isFinite(n) && n > 0);
           const top = reps.length ? Math.max(...reps) : 0;
           const est = Math.round(e1rm(Number(l.weight) || 0, top) * 10) / 10;
-          return [date, input.session ?? '', l.exercise, Number(l.weight) || '', l.set1 ?? '', l.set2 ?? '', l.set3 ?? '', l.notes ?? '', l.rir ?? '', est || ''];
-        });
+          const pr = await prCheckBefore(l.exercise, date, est);
+          if (pr) prNotes.push(pr.trim());
+          rows.push([date, input.session ?? '', l.exercise, Number(l.weight) || '', l.set1 ?? '', l.set2 ?? '', l.set3 ?? '', l.notes ?? '', l.rir ?? '', est || '', l.set4 ?? '', l.set5 ?? '', l.set6 ?? '']);
+        }
         await bridge.appendSheet('WORKOUT_DATABASE', rows);
         invalidateSnapshot();
-        return ok(`Logged ${rows.length} lift(s) to WORKOUT_DATABASE for ${date}: ${lifts.map((l: any) => l.exercise).join(', ')}.`);
+        return ok(
+          `Logged ${rows.length} lift(s) to WORKOUT_DATABASE for ${date}: ${lifts.map((l: any) => l.exercise).join(', ')}.` +
+            (prNotes.length ? ` ${prNotes.join(' ')}` : ''),
+        );
       }
       case 'ingest_workout': {
         const res = await ingestWorkout(input?.date);
+        const prMsg = res.prs.length ? ` 🎉 PR: ${res.prs.join('; ')} — celebrate this with Matt!` : '';
         return ok(
           res.added > 0
-            ? `Imported ${res.added} exercise(s) into WORKOUT_DATABASE: ${res.exercises.join(', ')}${res.skipped ? ` (skipped ${res.skipped} already-logged)` : ''}.`
+            ? `Imported ${res.added} exercise(s) into WORKOUT_DATABASE: ${res.exercises.join(', ')}${res.skipped ? ` (skipped ${res.skipped} already-logged)` : ''}.${prMsg}`
             : `No new actuals to import${res.skipped ? ` (${res.skipped} already logged)` : ' (no filled sets found)'}.`,
         );
       }
       case 'log_meal': {
         const grams = Number(input.protein_g) || 0;
-        const r = await logMeal({ proteinG: grams, food: input.food ?? '', meal: input.meal });
+        const r = await logMeal({ proteinG: grams, food: input.food ?? '', meal: input.meal, date: input.date });
         invalidateSnapshot();
-        return ok(`Logged ${input.food} (${Math.round(grams)}g protein). Today: ${Math.round(r.totalG)}g / ${PROTEIN_TARGET_G}g — ${r.remainingG}g to go.`);
+        const today = todayStr(config.tz);
+        return ok(
+          r.date === today
+            ? `Logged ${input.food} (${Math.round(grams)}g protein). Today: ${Math.round(r.totalG)}g / ${PROTEIN_TARGET_G}g — ${r.remainingG}g to go.`
+            : `Logged ${input.food} (${Math.round(grams)}g protein) to ${r.date}. That day's total: ${Math.round(r.totalG)}g / ${PROTEIN_TARGET_G}g. (Does NOT count toward today.)`,
+        );
       }
       case 'get_exercise_progression': {
         const rows = await bridge.readSheet('WORKOUT_DATABASE');
@@ -525,7 +609,7 @@ export async function executeTool(
       }
       case 'get_bodycomp_trend': {
         const rows = (await bridge.readSheet('BODY_COMPOSITION')) as unknown[][];
-        const days = input?.days ?? 21;
+        const days = clampDays(input?.days, 21);
         const header = (rows[0] || []).map((h) => String(h ?? '').trim().toLowerCase());
         const di = header.findIndex((h) => h.includes('date'));
         const wi = header.findIndex((h) => h.includes('weight'));
@@ -556,6 +640,21 @@ export async function executeTool(
       case 'log_today':
         await appendDailyLog(todayStr(config.tz), input.note);
         return ok('Logged.');
+      case 'recall_day': {
+        const d = String(input.date ?? '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return ok('Pass date as YYYY-MM-DD.');
+        const log = await readDailyLog(d);
+        if (!log.trim()) return ok(`No daily log exists for ${d}.`);
+        // Tail-cap: a chatty day's full transcript can be thousands of tokens.
+        const capped = log.length > 8000 ? `(…earlier truncated)\n${log.slice(-8000)}` : log;
+        return json({ date: d, log: capped });
+      }
+      case 'search_memory': {
+        const hits = await searchDailyLogs(String(input.query ?? ''));
+        return hits
+          ? json({ matches: hits })
+          : ok('No matching lines in the daily logs (try fewer/different keywords).');
+      }
       case 'update_coaching_rule': {
         if (ctx.sessionType !== 'main') return ok('Rule edits are only allowed in private chat.');
         const res = await editBrainFile(input.file, {
@@ -592,4 +691,31 @@ function json(v: unknown): string {
 }
 function ok(message: string): string {
   return JSON.stringify({ ok: true, message });
+}
+/** Clamp an untrusted model-supplied `days` param (NaN-safe) to 1..31. */
+function clampDays(v: unknown, dflt: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return dflt;
+  return Math.min(31, Math.max(1, Math.round(n)));
+}
+
+/**
+ * PR check at log time: compare a just-computed e1RM to the exercise's best
+ * BEFORE `date`. Returns a celebration suffix for the tool result ('' if not a
+ * PR / no prior history) and drops a [pr] line into the daily log so briefings
+ * and later turns can reference it. Never throws.
+ */
+async function prCheckBefore(exercise: string, date: string, est: number): Promise<string> {
+  try {
+    if (!exercise || !est) return '';
+    const rows = (await bridge.readSheet('WORKOUT_DATABASE')) as unknown[][];
+    const prior = bestE1rmBefore(parseWorkoutDb(rows), exercise, date);
+    if (prior > 0 && est > prior) {
+      await appendDailyLog(todayStr(config.tz), `[pr] New e1RM PR — ${exercise}: ${est} (prev best ${prior})`).catch(() => undefined);
+      return ` 🎉 NEW e1RM PR on ${exercise}: ${est} (prev best ${prior}) — celebrate this with Matt!`;
+    }
+    return '';
+  } catch {
+    return '';
+  }
 }

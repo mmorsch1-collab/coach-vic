@@ -41,11 +41,18 @@ export class CoachBot {
         return;
       }
       const text = ctx.message.text;
+      // Telegram's typing indicator lasts ~5s; a multi-tool Sonnet turn can run
+      // much longer — keep it alive so Matt sees "typing…" instead of dead air.
+      const typing = setInterval(
+        () => void ctx.replyWithChatAction('typing').catch(() => undefined),
+        4_500,
+      );
       try {
         await ctx.replyWithChatAction('typing');
         const reply = await handleUserMessage(text);
+        clearInterval(typing);
         for (const part of chunk(reply)) {
-          await ctx.reply(part);
+          await this.sendPart(part);
         }
       } catch (err) {
         logger.error({ err }, 'Failed handling inbound message');
@@ -54,16 +61,87 @@ export class CoachBot {
         } catch {
           /* ignore */
         }
+      } finally {
+        clearInterval(typing);
+      }
+    });
+
+    // Photos (meal pics): download, pass to the vision turn with the caption.
+    this.bot.on('message:photo', async (ctx) => {
+      const from = String(ctx.chat.id);
+      if (from !== this.chatId) {
+        logger.warn({ from }, 'Ignoring photo from non-owner chat');
+        return;
+      }
+      const caption = ctx.message.caption ?? '';
+      const typing = setInterval(
+        () => void ctx.replyWithChatAction('typing').catch(() => undefined),
+        4_500,
+      );
+      try {
+        await ctx.replyWithChatAction('typing');
+        const sizes = ctx.message.photo;
+        const best = sizes[sizes.length - 1]; // largest rendition
+        const file = await ctx.api.getFile(best.file_id);
+        const url = `https://api.telegram.org/file/bot${config.telegramBotToken}/${file.file_path}`;
+        const res = await fetch(url);
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.length > 4_500_000) {
+          await ctx.reply("That photo's too large for me to read — mind describing it instead?");
+          return;
+        }
+        const reply = await handleUserMessage({
+          text: caption,
+          image: { base64: buf.toString('base64'), mediaType: 'image/jpeg' },
+        });
+        clearInterval(typing);
+        for (const part of chunk(reply)) {
+          await this.sendPart(part);
+        }
+      } catch (err) {
+        logger.error({ err }, 'Failed handling inbound photo');
+        try {
+          await ctx.reply("Couldn't process that photo — try again or just describe it.");
+        } catch {
+          /* ignore */
+        }
+      } finally {
+        clearInterval(typing);
+      }
+    });
+
+    // Voice/audio: no transcription path yet — fail gracefully instead of silently.
+    this.bot.on(['message:voice', 'message:audio', 'message:video_note'], async (ctx) => {
+      const from = String(ctx.chat.id);
+      if (from !== this.chatId) return;
+      try {
+        await ctx.reply("Can't listen to voice notes yet — shoot me a text and I'm on it. 📝");
+      } catch {
+        /* ignore */
       }
     });
 
     this.bot.catch((err) => logger.error({ err: err.error }, 'grammY error'));
   }
 
+  /**
+   * Send one chunk with formatting: the model writes **bold** (not Telegram's
+   * legacy *bold*), so convert, try Markdown, and fall back to plain text — a
+   * malformed-markdown 400 must never swallow a coaching message.
+   */
+  private async sendPart(part: string): Promise<void> {
+    const md = part.replace(/\*\*/g, '*');
+    try {
+      await this.bot.api.sendMessage(this.chatId, md, { parse_mode: 'Markdown' });
+    } catch {
+      await this.bot.api.sendMessage(this.chatId, part);
+    }
+  }
+
   /** Send a message to the owner. Throws on failure (delivery queue handles retry). */
   async sendMessage(text: string): Promise<void> {
     for (const part of chunk(text)) {
-      await this.bot.api.sendMessage(this.chatId, part);
+      await this.sendPart(part);
     }
   }
 

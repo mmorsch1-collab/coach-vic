@@ -61,6 +61,55 @@ export async function readRecentDailyLogs(tz: string): Promise<string> {
   return [y, t].filter((s) => s.trim()).join('\n');
 }
 
+/** All daily-log dates on disk, sorted ascending (YYYY-MM-DD). */
+export async function listDailyLogDates(): Promise<string[]> {
+  try {
+    const files = await fs.readdir(path.join(ws, 'memory'));
+    return files
+      .filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f))
+      .map((f) => f.slice(0, 10))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Search the raw daily logs for a query (case-insensitive, all terms must hit a
+ * line). Returns matching lines (newest first) prefixed with their date — the
+ * recall path for "what did I say about X last week?".
+ */
+export async function searchDailyLogs(
+  query: string,
+  opts: { maxLines?: number; maxDays?: number } = {},
+): Promise<string> {
+  const maxLines = opts.maxLines ?? 30;
+  const maxDays = opts.maxDays ?? 60;
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 2);
+  if (!terms.length) return '';
+
+  const dates = (await listDailyLogDates()).slice(-maxDays).reverse(); // newest first
+  const hits: string[] = [];
+  for (const date of dates) {
+    if (hits.length >= maxLines) break;
+    const log = await readDailyLog(date);
+    for (const rawLine of log.split('\n')) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      const lower = line.toLowerCase();
+      if (terms.every((t) => lower.includes(t))) {
+        hits.push(`[${date}] ${line.replace(/^-\s*\[[^\]]*\]\s*/, '')}`.slice(0, 400));
+        if (hits.length >= maxLines) break;
+      }
+    }
+  }
+  return hits.join('\n');
+}
+
 export async function readMemoryMd(): Promise<string> {
   return readBrainFile('MEMORY.md');
 }

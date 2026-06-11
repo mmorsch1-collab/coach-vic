@@ -51,8 +51,11 @@ export function parseWorkoutDb(rows: unknown[][]): SetLog[] {
   if (!rows || rows.length < 2) return [];
   const header = rows[0].map((h) => String(h ?? '').trim().toLowerCase());
   const col = (name: string) => header.findIndex((h) => h.includes(name));
+  // Set_4..Set_6 are trailing columns (added 2026-06-10) so 4+-set sessions stop
+  // being silently undercounted; older rows simply have them blank.
   const di = col('date'), si = col('session'), ei = col('exercise'),
     wi = col('weight'), s1 = col('set_1'), s2 = col('set_2'), s3 = col('set_3'),
+    s4 = col('set_4'), s5 = col('set_5'), s6 = col('set_6'),
     ni = col('notes'), ri = col('rir');
   const out: SetLog[] = [];
   for (let r = 1; r < rows.length; r++) {
@@ -60,7 +63,7 @@ export function parseWorkoutDb(rows: unknown[][]): SetLog[] {
     const ex = String(row[ei] ?? '').trim();
     const dateRaw = String(row[di] ?? '').trim();
     if (!ex || !/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) continue; // skip blanks/narrative rows
-    const reps = [s1, s2, s3]
+    const reps = [s1, s2, s3, s4, s5, s6]
       .map((i) => (i >= 0 ? Number(row[i]) : NaN))
       .filter((n) => Number.isFinite(n) && n > 0);
     out.push({
@@ -100,6 +103,22 @@ export function exerciseSeries(logs: SetLog[], exercise: string): SessionPoint[]
       return { date: l.date, weight: l.weight, topReps: best.topReps, topE1rm: Math.round(best.topE1rm * 10) / 10, rir: l.rir };
     })
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Best e1RM for an exercise STRICTLY BEFORE a date (exact-name match, not the
+ * substring regex of exerciseSeries — "Curl" must not absorb "Hammer Curl").
+ * Returns 0 when there is no prior history. Used for PR detection at log time.
+ */
+export function bestE1rmBefore(logs: SetLog[], exercise: string, beforeDate: string): number {
+  const name = exercise.trim().toLowerCase();
+  let best = 0;
+  for (const l of logs) {
+    if (l.date >= beforeDate) continue;
+    if (l.exercise.trim().toLowerCase() !== name) continue;
+    for (const r of l.reps) best = Math.max(best, e1rm(l.weight, r));
+  }
+  return Math.round(best * 10) / 10;
 }
 
 /** Linear-regression slope of y over time, expressed per 7 days. */

@@ -121,6 +121,7 @@
 - **Factors:** April 22 deadline, 1-hour morning window, body proportions
 - **Last_Measured:** 2026-02-22 (4-mile run in Florida, chest session 2/20)
 - **Notes:** Skipping legs (already proportioned at 22"), focusing upper body development + cardio for definition
+- **SUPERSEDED (2026-06-10):** deadline past; split is now 5×/wk Mon–Fri with chest 2×/wk and legs at maintenance (see WORKOUT_PROTOCOL.md). Morning-window observation still holds.
 ## PATTERN_009 — Workout Fatigue & Gas Management
 **Metric:** Session capacity / volume tolerance
 **Baseline:** Can hit primary lift + main volume work, but ancillary volume (flys, isolation tricep) may get dropped when fatigue sets in

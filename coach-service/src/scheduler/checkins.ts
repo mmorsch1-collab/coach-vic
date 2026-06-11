@@ -8,6 +8,12 @@ import {
 } from './gating.js';
 import { logger } from '../logger.js';
 import { todayProteinTotal, PROTEIN_TARGET_G } from '../coaching/nutrition.js';
+import { workoutSheetStatus } from '../coaching/workoutIngest.js';
+import { parseWorkoutDb } from '../coaching/metrics.js';
+import { bridge } from '../bridge/client.js';
+import { todayStr } from '../util/time.js';
+import { config } from '../config.js';
+import { isSkip } from './sentinel.js';
 
 /**
  * Day-part check-ins. Each runs an LLM-FREE assessment first; Claude is only
@@ -42,23 +48,12 @@ async function composeNudge(intent: string, a: WhoopAssessment): Promise<string>
   return r.text.trim();
 }
 
-/**
- * Robust SKIP detection. The model is told to reply "SKIP" to suppress a nudge,
- * but it sometimes wraps it in markdown or trails it after reasoning (e.g.
- * "...not worth it.\n\n**SKIP**"). Exact-match misses those and would leak the
- * reasoning to Matt — so treat a trailing/standalone SKIP token as a skip.
- */
-function isSkip(text: string): boolean {
-  const t = text.replace(/[*_`>#]/g, '').trim().toUpperCase();
-  if (!t) return true;
-  const tokens = t.split(/\s+/);
-  return t === 'SKIP' || tokens[tokens.length - 1] === 'SKIP';
-}
-
 type OpportunityFn = (a: WhoopAssessment) => string | null;
 
 async function runGenericCheckin(label: string, opp: OpportunityFn): Promise<CheckinResult> {
-  const a = await assessWhoop();
+  // 18h window: "recovery was scored this morning" is fresh enough for day-part
+  // nudges (the strict 2h window is only for the 5:15 ritual).
+  const a = await assessWhoop(18);
   if (!a.ok) return { sent: false, reason: a.reason ?? 'whoop unavailable' };
   if (!a.fresh) return { sent: false, reason: 'whoop not fresh' };
 
@@ -82,15 +77,26 @@ export async function runProteinCheck(): Promise<CheckinResult> {
   const { totalG, remainingG, meals } = await todayProteinTotal();
   if (totalG >= PROTEIN_TARGET_G) return { sent: false, reason: 'protein target met' };
 
-  const logged = meals > 0 ? `Logged so far: ${Math.round(totalG)}g.` : 'Nothing logged yet today.';
+  // Deterministic suppressors — don't pay the LLM to decide what code can decide:
+  // close enough to target isn't worth an interruption…
+  if (remainingG <= 15) return { sent: false, reason: `within 15g of target (${remainingG}g to go)` };
+  // …and "nothing logged" needs a question, not judgment — fixed template, no LLM.
+  if (meals === 0) {
+    return {
+      sent: true,
+      message:
+        `No meals logged yet today — what did you eat? Give me the rundown and I'll tally your protein ` +
+        `(target ${PROTEIN_TARGET_G}g).`,
+    };
+  }
+
   const instruction = [
     `Coachable moment: Matt is behind his protein target this evening.`,
-    `Context (do NOT dump this at him): today=${Math.round(totalG)}g / ${PROTEIN_TARGET_G}g, ${remainingG}g to go. ${logged}`,
+    `Context (do NOT dump this at him): today=${Math.round(totalG)}g / ${PROTEIN_TARGET_G}g, ${remainingG}g to go (${meals} meal(s) logged).`,
     ``,
     `Write ONE short Telegram message in Coach Vic's voice: note where he stands and give a single`,
-    `concrete way to close the gap tonight (a specific high-protein option), or — if little is logged —`,
-    `ask what he ate today so you can log it. No data dump, no visible reasoning. If it's genuinely too`,
-    `late or not worth interrupting, reply with exactly "SKIP" and nothing else.`,
+    `concrete way to close the gap tonight (a specific high-protein option). No data dump, no visible`,
+    `reasoning. If it's genuinely not worth interrupting, reply with exactly "SKIP" and nothing else.`,
   ].join('\n');
 
   const r = await runTurn({
@@ -112,3 +118,49 @@ export async function runProteinCheck(): Promise<CheckinResult> {
 export const runMidMorningCheck = () => runGenericCheckin('mid-morning', midMorningOpportunity);
 export const runAfternoonCheck = () => runGenericCheckin('afternoon', afternoonOpportunity);
 export const runEveningCheck = () => runGenericCheckin('evening', eveningConcern);
+
+/**
+ * Missed-workout check (weekday mid-morning). Deterministic, and it READS THE
+ * SHEET FIRST: filled Weight+Reps means Matt trained even if he never said so —
+ * never nudge someone about a workout he already did. Only fires when a sheet
+ * was built for today, nothing is filled in, and nothing was logged in chat.
+ */
+export async function runMissedWorkoutCheck(): Promise<CheckinResult> {
+  const today = todayStr(config.tz);
+
+  const sheet = await workoutSheetStatus(today);
+  if (!sheet.exists) return { sent: false, reason: 'no workout sheet today' };
+  if (sheet.filledSets > 0) return { sent: false, reason: `sheet has ${sheet.filledSets} filled sets — he trained` };
+
+  // He might have logged via chat (log_set/log_workout) without touching the sheet.
+  try {
+    const rows = (await bridge.readSheet('WORKOUT_DATABASE')) as unknown[][];
+    const todayLogs = parseWorkoutDb(rows).filter((l) => l.date === today);
+    if (todayLogs.length > 0) return { sent: false, reason: 'workout already logged in DB' };
+  } catch {
+    /* DB unreadable — proceed; worst case the nudge asks about a done workout */
+  }
+
+  const instruction = [
+    `Coachable moment: it's mid-morning and today's planned workout looks missed.`,
+    `Context (do NOT dump this at him): the sheet "${sheet.title}" was built for today with`,
+    `${sheet.exercises} exercises, but nothing is filled in and nothing was logged.`,
+    ``,
+    `Write ONE short Telegram message in Coach Vic's voice: no guilt, no scolding. Ask if the`,
+    `5:30 session happened (maybe he just hasn't filled the sheet) and offer ONE concrete`,
+    `fallback: the 20-min home-gym backup matched to today's split, or a shifted gym window if`,
+    `his calendar allows. If, on reflection, this isn't worth interrupting him, reply exactly "SKIP".`,
+  ].join('\n');
+
+  const r = await runTurn({
+    messages: [{ role: 'user', content: instruction }],
+    sessionType: 'isolated',
+    retrievalQuery: 'missed workout home gym backup reschedule',
+    tier: 'primary',
+    maxTokens: 400,
+    maxIterations: 4,
+  });
+  const message = r.text.trim();
+  if (isSkip(message)) return { sent: false, reason: 'llm skipped' };
+  return { sent: true, message };
+}

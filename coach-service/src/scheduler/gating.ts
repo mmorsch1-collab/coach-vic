@@ -28,7 +28,13 @@ export function recoveryColor(score: number | null | undefined): RecoveryColor {
   return 'red';
 }
 
-export async function assessWhoop(): Promise<WhoopAssessment> {
+/**
+ * @param maxAgeHours freshness window for recovery.metadata.updated_at. The 5:15
+ * ritual needs a freshly-scored TODAY recovery (2h). Day-part check-ins only need
+ * "scored this morning" — WHOOP scores once after waking, so a 2h window would
+ * make every 10:30+/15:30/20:30 check-in permanently silent ("whoop not fresh").
+ */
+export async function assessWhoop(maxAgeHours = 2): Promise<WhoopAssessment> {
   let data: WhoopToday;
   try {
     data = await bridge.whoopToday();
@@ -50,7 +56,7 @@ export async function assessWhoop(): Promise<WhoopAssessment> {
   const strain = data.strain?.score ?? null;
   const updatedAt = data.recovery?.metadata?.updated_at;
   const scoreState = data.recovery?.metadata?.score_state;
-  const fresh = isFresh(updatedAt, 2) && scoreState === 'SCORED';
+  const fresh = isFresh(updatedAt, maxAgeHours) && scoreState === 'SCORED';
 
   return {
     ok: true,

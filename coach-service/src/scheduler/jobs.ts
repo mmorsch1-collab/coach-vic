@@ -3,10 +3,11 @@ import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { JsonStore } from '../state/jsonStore.js';
 import { todayStr } from '../util/time.js';
-import { tryReserveProactive } from './proactiveState.js';
+import { tryReserveProactive, wouldAllowProactive } from './proactiveState.js';
 import { appendDailyLog } from '../memory/store.js';
+import { mainSession } from '../session/session.js';
 import { runMorningRitual } from './morningRitual.js';
-import { runMidMorningCheck, runAfternoonCheck, runEveningCheck, runProteinCheck, type CheckinResult } from './checkins.js';
+import { runMidMorningCheck, runAfternoonCheck, runEveningCheck, runProteinCheck, runMissedWorkoutCheck, type CheckinResult } from './checkins.js';
 import { runDailyCuration } from '../memory/curation.js';
 import { runSelfHeal } from './selfHeal.js';
 import { runMaintenanceReport } from './maintenance.js';
@@ -24,7 +25,13 @@ export interface JobDeps {
   deliver: (text: string) => Promise<void>;
 }
 
-const ritualState = new JsonStore<{ lastBriefingDay: string }>('ritual-state.json', {
+const ritualState = new JsonStore<{
+  lastBriefingDay: string;
+  // Compose-once: the 7:00 fallback re-delivers a stored briefing instead of
+  // re-running the full Sonnet composition (and its side-effect tools).
+  composedDay?: string;
+  composedMessage?: string;
+}>('ritual-state.json', {
   lastBriefingDay: '',
 });
 
@@ -43,6 +50,13 @@ async function emit(type: string, message: string, deps: JobDeps, opts = {}): Pr
   }
   await deps.deliver(message);
   await appendDailyLog(todayStr(config.tz), `[proactive:${type}] ${message}`);
+  // Thread the proactive message into the chat history: Matt's reply to a nudge
+  // should land with the nudge (and its question) in conversational context.
+  try {
+    await mainSession.appendAssistant(message);
+  } catch (err) {
+    logger.warn({ err, type }, 'Could not append proactive message to session history');
+  }
   return true;
 }
 
@@ -63,18 +77,43 @@ async function morningRitualJob(deps: JobDeps, isFallback = false): Promise<void
   }
   morningRunning = true;
   try {
-    const res = await runMorningRitual();
-    if (!res.sent || !res.message) {
-      logger.info({ reason: res.reason, isFallback }, 'Morning ritual produced no message');
+    // Gate peek BEFORE composing: if delivery would be suppressed anyway
+    // (proactive disabled / daily cap), don't pay for the Sonnet composition.
+    const peek = await wouldAllowProactive('morning-briefing', {
+      ignoreQuietHours: true,
+      ignoreCooldown: true,
+    });
+    if (!peek.allowed) {
+      logger.info({ reason: peek.reason, isFallback }, 'Morning ritual skipped before compose (gate)');
       return;
     }
+
+    // Reuse a same-day composition (e.g. 5:15 composed but delivery was
+    // suppressed/crashed) instead of re-running the ritual + side-effect tools.
+    const st2 = await ritualState.read();
+    let message = st2.composedDay === today ? st2.composedMessage : undefined;
+    if (!message) {
+      const res = await runMorningRitual();
+      if (!res.sent || !res.message) {
+        logger.info({ reason: res.reason, isFallback }, 'Morning ritual produced no message');
+        return;
+      }
+      message = res.message;
+      await ritualState.update((s) => {
+        s.composedDay = today;
+        s.composedMessage = message;
+      });
+    } else {
+      logger.info({ isFallback }, 'Morning ritual reusing same-day composed briefing');
+    }
+
     // Scheduled briefing: bypass quiet hours + cooldown (once-daily wake message).
-    const delivered = await emit('morning-briefing', res.message, deps, {
+    const delivered = await emit('morning-briefing', message, deps, {
       ignoreQuietHours: true,
       ignoreCooldown: true,
     });
     // Only mark the day done if we actually delivered, so a suppressed/failed run
-    // leaves the 7:00 fallback free to retry.
+    // leaves the 7:00 fallback free to retry (without recomposing).
     if (delivered) {
       await ritualState.update((s) => {
         s.lastBriefingDay = today;
@@ -86,6 +125,13 @@ async function morningRitualJob(deps: JobDeps, isFallback = false): Promise<void
 }
 
 async function checkinJob(type: string, run: () => Promise<CheckinResult>, deps: JobDeps): Promise<void> {
+  // Gate peek BEFORE composing — a nudge the gate would suppress (quiet hours,
+  // cap, cooldown, disabled) should never cost an LLM composition.
+  const peek = await wouldAllowProactive(type);
+  if (!peek.allowed) {
+    logger.info({ type, reason: peek.reason }, 'Check-in skipped before compose (gate)');
+    return;
+  }
   const res = await run();
   if (res.sent && res.message) {
     await emit(type, res.message, deps);
@@ -109,6 +155,8 @@ export function registerJobs(deps: JobDeps): ScheduledTask[] {
   tasks.push(cron.schedule('15 5 * * 1-5', guard('morning-5:15', () => morningRitualJob(deps)), tzOpt));
   // M–F 7:00 AM — fallback if 5:15 found stale data.
   tasks.push(cron.schedule('0 7 * * 1-5', guard('morning-fallback-7:00', () => morningRitualJob(deps, true)), tzOpt));
+  // M–F 8:15 AM — missed-workout check (sheet built but untouched; reads the sheet first).
+  tasks.push(cron.schedule('15 8 * * 1-5', guard('missed-workout-8:15', () => checkinJob('missed-workout', runMissedWorkoutCheck, deps)), tzOpt));
   // M–F 10:30 AM — mid-morning.
   tasks.push(cron.schedule('30 10 * * 1-5', guard('mid-morning-10:30', () => checkinJob('mid-morning', runMidMorningCheck, deps)), tzOpt));
   // M–F 3:30 PM — afternoon.

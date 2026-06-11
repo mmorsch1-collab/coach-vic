@@ -12,7 +12,11 @@ const store = new JsonStore<{ byDate: Record<string, DayUsage> }>('usage.json', 
 
 export async function runCostReport(deliver: (text: string) => Promise<void>): Promise<boolean> {
   const s = await store.read();
-  const dates = Object.keys(s.byDate).sort();
+  // Only days with actual chat traffic count — older-schema/no-chat days would
+  // deflate the per-day average and bias the recommendation toward "keep Sonnet".
+  const dates = Object.keys(s.byDate)
+    .sort()
+    .filter((d) => (s.byDate[d].mainCalls ?? 0) > 0);
   let mainCost = 0;
   let mainCalls = 0;
   for (const d of dates) {
@@ -29,8 +33,9 @@ export async function runCostReport(deliver: (text: string) => Promise<void>): P
   const monthSonnet = perDay * 30;
   const monthHaiku = monthSonnet / 3; // Sonnet is exactly 3× Haiku per token
   const delta = monthSonnet - monthHaiku;
+  // Threshold scaled to the ~$8-15/mo budget (was $10 — most of the budget).
   const rec =
-    delta < 10
+    delta < 3
       ? 'My take: keep chat on Sonnet — the accuracy is worth the small premium.'
       : 'My take: worth routing routine chat to Haiku and keeping Sonnet for coaching-heavy turns.';
 

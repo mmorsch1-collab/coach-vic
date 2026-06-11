@@ -3,6 +3,7 @@ import { logger } from '../logger.js';
 import { bridge, isAuthError } from '../bridge/client.js';
 import { JsonStore } from '../state/jsonStore.js';
 import { minutesSince } from '../util/time.js';
+import { inQuietHours } from './proactiveState.js';
 
 /**
  * Self-healing / watchdog for the data layer. Runs on a schedule and:
@@ -36,6 +37,13 @@ function authUrl(key: string): string {
 }
 
 async function alertOnce(deliver: (t: string) => Promise<void>, key: string, message: string): Promise<void> {
+  // A 1 AM re-auth link wakes Matt up for something he can only fix in the
+  // morning anyway. Defer during quiet hours WITHOUT setting the cooldown, so
+  // the first hourly run after quiet hours delivers it.
+  if (inQuietHours()) {
+    logger.info({ key }, 'Self-heal alert deferred (quiet hours)');
+    return;
+  }
   const state = await store.read();
   if (minutesSince(state.lastAlertMsByKey[key]) < ALERT_COOLDOWN_MIN) {
     logger.info({ key }, 'Self-heal alert suppressed (cooldown)');

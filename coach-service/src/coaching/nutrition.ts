@@ -55,18 +55,28 @@ async function readMeals(): Promise<Meal[]> {
   }
 }
 
-export async function logMeal(m: { proteinG: number; food: string; meal?: string }): Promise<{
-  totalG: number;
-  remainingG: number;
-}> {
+export async function logMeal(m: {
+  proteinG: number;
+  food: string;
+  meal?: string;
+  /** YYYY-MM-DD the food was EATEN (defaults to today). Lets "yesterday I had…" land on the right day. */
+  date?: string;
+}): Promise<{ totalG: number; remainingG: number; date: string }> {
   await ensureTab();
-  const date = todayStr(config.tz);
-  const time = new Date().toISOString().slice(11, 16);
+  const today = todayStr(config.tz);
+  const date = m.date && /^\d{4}-\d{2}-\d{2}$/.test(m.date) ? m.date : today;
+  // Local wall-clock time (was UTC, which made 6:40 AM read as 10:40).
+  const time = new Intl.DateTimeFormat('en-GB', {
+    timeZone: config.tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date());
   const grams = Number(m.proteinG) || 0;
   await bridge.appendSheet(SHEET, [[date, time, (m.meal ?? '').toLowerCase(), m.food ?? '', grams]]);
   const meals = await readMeals();
   const total = meals.filter((x) => x.date === date).reduce((a, x) => a + x.proteinG, 0);
-  return { totalG: total, remainingG: Math.max(0, PROTEIN_TARGET_G - total) };
+  return { totalG: total, remainingG: Math.max(0, PROTEIN_TARGET_G - total), date };
 }
 
 export async function todayProteinTotal(): Promise<{ totalG: number; remainingG: number; meals: number }> {

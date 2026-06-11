@@ -1,9 +1,10 @@
 import { config } from '../config.js';
 import { logger } from '../logger.js';
-import { todayStr } from '../util/time.js';
+import { todayStr, yesterdayStr } from '../util/time.js';
 import { bridge } from '../bridge/client.js';
 import { ingestWorkout } from '../coaching/workoutIngest.js';
 import { todayProteinTotal } from '../coaching/nutrition.js';
+import { readDayUsage } from '../llm/usage.js';
 
 /**
  * Deterministic daily "close" — NO LLM, NO Telegram. Runs after dinner to:
@@ -26,9 +27,17 @@ export async function runDailyClose(): Promise<void> {
     logger.warn({ err, date }, 'daily-close: could not list sheets');
   }
 
-  // Ingest actuals.
+  // Ingest actuals — today AND yesterday (deduped/idempotent): a sheet filled in
+  // after 23:59 would otherwise never be ingested and the session would vanish
+  // from WORKOUT_DATABASE.
   const res = await ingestWorkout(date);
   logger.info({ date, ...res }, 'daily-close: ingest summary');
+  try {
+    const yres = await ingestWorkout(yesterdayStr(config.tz));
+    if (yres.added > 0) logger.info({ ...yres }, 'daily-close: late-filled yesterday ingested');
+  } catch (err) {
+    logger.warn({ err }, 'daily-close: yesterday ingest failed (non-fatal)');
+  }
 
   // Gap: workout tab present but nothing filled in and nothing already logged.
   if (hasWorkoutTab && res.added === 0 && res.skipped === 0) {
@@ -45,5 +54,19 @@ export async function runDailyClose(): Promise<void> {
     } catch (err) {
       logger.warn({ err, date }, 'daily-close: could not check nutrition');
     }
+  }
+
+  // Cache health: a day of writes with ZERO reads means a silent prompt-cache
+  // invalidator crept in — we'd be paying the write premium for nothing.
+  try {
+    const u = await readDayUsage(date);
+    if (u && u.cacheWrite > 0 && u.cacheRead === 0) {
+      logger.warn(
+        { date, cacheWrite: u.cacheWrite },
+        'daily-close CACHE: cache written all day but never read — check for a prefix invalidator',
+      );
+    }
+  } catch (err) {
+    logger.warn({ err, date }, 'daily-close: could not check cache usage');
   }
 }

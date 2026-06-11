@@ -18,6 +18,12 @@ export function yesterdayStr(tz: string): string {
   return todayStr(tz, new Date(Date.now() - 24 * 60 * 60 * 1000));
 }
 
+/** "YYYY-MM-DD" + n days (n may be negative). Anchored at noon to dodge DST edges. */
+export function addDaysStr(date: string, n: number): string {
+  const t = Date.parse(`${date}T12:00:00Z`);
+  return new Date(t + n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 /** Human-readable local time, e.g. "Mon Jun 8, 6:52 AM". */
 export function nowInTz(tz: string, when: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-US', {

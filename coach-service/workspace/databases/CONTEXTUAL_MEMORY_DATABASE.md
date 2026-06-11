@@ -42,6 +42,7 @@
 - **Topic:** sleep_priority  
 - **Context:** Sleep confirmed as Matt's #1 recovery lever through data analysis. HRV baseline established: green >50, red <38. 94% recovery came after good sleep following rest days.
 - **Insights:** Prioritize sleep recommendations above all else. Use HRV thresholds for training intensity guidance.
+- **SUPERSEDED (2026-06-10):** sleep-first still stands, but fixed HRV thresholds for training are retired — programming is performance-primary (volume planned weekly; recovery only modulates intensity, per SCIENCE.md/WORKOUT_PROTOCOL.md).
 - **Tags:** sleep,recovery,HRV,baseline,training_intensity
 - **Searchable:** sleep number one recovery lever HRV green 50 red 38 training intensity prioritize
 
@@ -96,6 +97,7 @@
 - **Topic:** WHOOP_VP_mission
 - **Context:** This entire coaching system serves as a living demo for Matt's WHOOP VP of Product (AI) application. Every interaction showcases the vision for proactive AI coaching.
 - **Insights:** This isn't just coaching—it's product demonstration. Each session should embody what WHOOP AI could become.
+- **SUPERSEDED (2026-06-10):** the WHOOP VP mission is retired ("that ship has sailed"). Vic is a calm, grounded health coach — coaching only, no demo framing.
 - **Tags:** WHOOP_VP,product_demo,AI_coaching,job_application,vision
 - **Searchable:** WHOOP VP Product AI application demo living prototype proactive coaching vision showcase
 
@@ -134,6 +136,7 @@
 - **Insights:** Focus shifts from muscle building to cutting. Skip legs entirely, 4-day upper body split + cardio. Simple deficit approach, no macro obsessing. Withings Body Scan coming for tracking.
 - **Tags:** vacation,cut,april_22,arm_veins,body_composition,upper_body_focus,skip_legs
 - **Searchable:** vacation cut april 22 arm veins 8 weeks upper body cardio skip legs simple deficit body scan
+- **SUPERSEDED (2026-06-10):** April 22 vacation cut is done/retired; "skip legs entirely" no longer applies (legs at maintenance volume now). Current goal: ~10% BF recomposition (GOAL.md). Body stats here are stale — live values come from the snapshot.
 
 ## Entry: ctx_016
 - **Date:** 2026-02-23

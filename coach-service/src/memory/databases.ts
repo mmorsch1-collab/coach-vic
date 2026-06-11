@@ -35,10 +35,11 @@ export async function loadEntries(file: DbFile): Promise<DbEntry[]> {
     if (err.code !== 'ENOENT') logger.warn({ err, file }, 'Failed to read RAG db');
     return [];
   }
-  // Split on lines beginning with "## " (entry headers), keep the header text.
-  const chunks = raw.split(/(?=^## )/m).filter((c) => c.trim().length > 0);
+  // Split on "## " AND "### " headers — legacy entries (### PREF_NNN / ### PATTERN_NNN)
+  // were clumping into whole-section mega-entries that drowned out retrieval.
+  const chunks = raw.split(/(?=^###? )/m).filter((c) => c.trim().length > 0);
   return chunks.map((chunk) => {
-    const m = chunk.match(/^##\s+(.+)$/m);
+    const m = chunk.match(/^##+\s+(.+)$/m);
     return { source: file, title: m ? m[1].trim() : '(untitled)', body: chunk.trim() };
   });
 }

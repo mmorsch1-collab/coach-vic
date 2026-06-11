@@ -1,8 +1,8 @@
 import { config } from '../config.js';
-import { readBrainFiles, readMemoryMd, readRecentDailyLogs } from '../memory/store.js';
+import { readBrainFiles, readMemoryMd, readDailyLog } from '../memory/store.js';
 import { retrieveContext } from '../memory/retrieval.js';
 import { buildSnapshot } from '../coaching/snapshot.js';
-import { todayStr, nowInTz } from '../util/time.js';
+import { todayStr, yesterdayStr, nowInTz } from '../util/time.js';
 
 /**
  * Assembles Coach Vic's system prompt. Split into a STATIC block (persona +
@@ -53,6 +53,18 @@ export interface DynamicOptions {
   sessionType: 'main' | 'isolated';
   /** A query to retrieve relevant RAG context for (usually the user's message or the job intent). */
   retrievalQuery?: string;
+  /** Set false when the caller embeds the daily logs itself (e.g. curation). Default true. */
+  includeRecentLogs?: boolean;
+}
+
+/** Tail-cap a daily log: keep the most recent `maxChars`, marking the truncation. */
+function tailCap(log: string, maxChars: number): string {
+  const t = log.trim();
+  if (t.length <= maxChars) return t;
+  const cut = t.slice(-maxChars);
+  // Start at the next entry boundary so we don't open mid-line.
+  const nl = cut.indexOf('\n- [');
+  return `(…earlier lines truncated)\n${nl >= 0 ? cut.slice(nl + 1) : cut}`;
 }
 
 export async function buildDynamicSystem(opts: DynamicOptions): Promise<string> {
@@ -84,9 +96,23 @@ export async function buildDynamicSystem(opts: DynamicOptions): Promise<string> 
     /* snapshot is best-effort; never block a turn on it */
   }
 
-  // Recent raw context (shared helper — yesterday + today).
-  const recent = await readRecentDailyLogs(config.tz);
-  if (recent.trim()) parts.push(`===== RECENT DAILY LOG (yesterday + today) =====\n${recent.trim()}`);
+  // Recent raw context — tail-capped: a chatty day's full transcript was the
+  // single largest uncached block in every prompt, and main-chat turns already
+  // carry the live conversation in the message history. The capped tail keeps
+  // the recall bridge across session resets without re-billing the whole day.
+  if (opts.includeRecentLogs !== false) {
+    const [yLog, tLog] = await Promise.all([
+      readDailyLog(yesterdayStr(config.tz)),
+      readDailyLog(todayStr(config.tz)),
+    ]);
+    const recent = [tailCap(yLog, 1500), tailCap(tLog, 4000)].filter(Boolean).join('\n');
+    if (recent.trim()) {
+      parts.push(
+        `===== RECENT DAILY LOG (yesterday + today, recent tail) =====\n` +
+          `(Full logs live in memory/YYYY-MM-DD.md; durable facts are curated nightly.)\n${recent.trim()}`,
+      );
+    }
+  }
 
   // Retrieved RAG context relevant to this turn.
   if (opts.retrievalQuery) {
