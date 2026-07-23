@@ -202,9 +202,21 @@ export async function buildSnapshot(): Promise<string> {
           `HRV ${d?.recovery?.hrv ?? '?'}ms, RHR ${d?.recovery?.restingHeartRate ?? '?'}, ` +
           `sleep ${d?.sleep?.durationHours ?? '?'}h, strain ${whoopToday!.strain ?? '?'}.`,
       );
+    } else if (!whoopToday?.ok && !whoopToday?.authError) {
+      // TRANSIENT fetch failure (WHOOP token refresh 502s are common and
+      // self-clear) — NOT a data-quality problem. The data itself may be
+      // perfectly good; we just didn't get it on this attempt, and the snapshot
+      // is cached for 10 minutes. Blocking recovery coaching outright here
+      // would silence Vic on a blip, so: retry through the tool instead.
+      lines.push(
+        `⚠ WHOOP fetch failed transiently this snapshot (${whoopToday?.reason ?? 'fetch failed'}) — ` +
+          `this is a known flaky token refresh, NOT stale data. If recovery matters this turn, ` +
+          `call get_whoop_today to retry, then apply the usual SCORED + freshness check to what ` +
+          `it returns. Only skip recovery coaching if that retry also fails.`,
+      );
     } else {
       const why = !whoopToday?.ok
-        ? (whoopToday?.reason ?? 'fetch failed')
+        ? (whoopToday?.reason ?? 'not authenticated')
         : !scored
           ? `score_state=${meta?.score_state ?? 'missing'} (not SCORED)`
           : !isToday
@@ -238,9 +250,15 @@ export async function buildSnapshot(): Promise<string> {
           `(from ${last7.length} record(s) in the last 7 days).`,
       );
     } else {
+      // The sheet is written by save_whoop_snapshot (a morning-ritual step), so
+      // it goes stale whenever the ritual is off — even while TODAY's live
+      // recovery is arriving fine. Say that, so this never reads as "WHOOP is
+      // down": today's numbers above are independent of this backlog.
       lines.push(
-        `⚠ No WHOOP_History records in the last 7 days (latest ${whoopRows[0].date}). No recovery ` +
-          `trend available — do not infer one from older records.`,
+        `⚠ No WHOOP_History records in the last 7 days (latest ${whoopRows[0].date}) — the ` +
+          `multi-day trend, HRV-streak and strain signals are UNAVAILABLE (not "flat", not "fine"). ` +
+          `This is a logging gap, not a WHOOP outage: today's live recovery above is unaffected. ` +
+          `Do not infer a trend from older records; use save_whoop_snapshot to start refilling it.`,
       );
     }
 
