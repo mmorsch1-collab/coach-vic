@@ -220,18 +220,29 @@ export async function buildSnapshot(): Promise<string> {
   }
 
   if (whoopRows.length) {
-    const last7 = whoopRows.slice(0, 7);
+    // By DAYS, not by rows: WHOOP_History has gaps and duplicate dates, so
+    // slice(0,7) could average records spanning months and label it "7d".
+    const last7 = whoopRows.filter((r) => daysSince(r.date) <= 7);
     const avg = (pick: (r: WhoopRow) => number) => {
       const xs = last7.map(pick).filter(Number.isFinite);
       return xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : NaN;
     };
     // Multi-day trend is the intensity-modifier signal — never a single day.
-    const recSlope = slopePerWeek(whoopRows.slice(0, 14).map((r) => ({ date: r.date, y: r.recovery })));
-    lines.push(
-      `Recovery trend (multi-day — THIS is the intensity modifier, not any single day): ` +
-        `7d avg ${avg((r) => r.recovery)}% (${sign(recSlope)}/wk), HRV 7d ${avg((r) => r.hrv)}ms, ` +
-        `RHR 7d ${avg((r) => r.rhr)}, sleep 7d ${avg((r) => r.sleepHours)}h.`,
-    );
+    const recent14 = whoopRows.filter((r) => daysSince(r.date) <= 14);
+    const recSlope = slopePerWeek(recent14.map((r) => ({ date: r.date, y: r.recovery })));
+    if (last7.length) {
+      lines.push(
+        `Recovery trend (multi-day — THIS is the intensity modifier, not any single day): ` +
+          `7d avg ${avg((r) => r.recovery)}% (${sign(recSlope)}/wk), HRV 7d ${avg((r) => r.hrv)}ms, ` +
+          `RHR 7d ${avg((r) => r.rhr)}, sleep 7d ${avg((r) => r.sleepHours)}h ` +
+          `(from ${last7.length} record(s) in the last 7 days).`,
+      );
+    } else {
+      lines.push(
+        `⚠ No WHOOP_History records in the last 7 days (latest ${whoopRows[0].date}). No recovery ` +
+          `trend available — do not infer one from older records.`,
+      );
+    }
 
     const drop = hrvDropStreak(whoopRows);
     if (drop.days >= 3) {
@@ -247,13 +258,21 @@ export async function buildSnapshot(): Promise<string> {
     const workoutDates = new Set(logs.map((l) => l.date));
     const sp = strainPattern(whoopRows, workoutDates);
     if (sp.workoutDays > 0) {
-      const note =
-        sp.flag === 'recovery_debt'
-          ? ` ⚠ strain >16 on ${sp.high} day(s) — recovery debt building.`
-          : sp.flag === 'undertrained'
-            ? ` ⚠ strain <10 on ${sp.low}/${sp.workoutDays} workout days — undertrained, intensity left on the table.`
-            : '';
-      lines.push(`Workout-day strain (last 14d): avg ${sp.avg} over ${sp.workoutDays} days (target ~12–15).${note}`);
+      if (sp.lowConfidence) {
+        // Morning-captured strain, not day totals — report it, but never coach
+        // "add intensity" off it (see strainPattern's doc comment).
+        lines.push(
+          `Workout-day strain (last 14d): avg ${sp.avg} over ${sp.workoutDays} days — ` +
+            `IMPLAUSIBLY LOW, so these are morning captures (strain-so-far at wake), not day ` +
+            `totals. Do NOT call Matt undertrained or tell him to add intensity from this. ` +
+            `Strain data is effectively unavailable; judge effort from logged sets/RIR instead.`,
+        );
+      } else {
+        lines.push(
+          `Workout-day strain (last 14d): avg ${sp.avg} over ${sp.workoutDays} days (target ~12–15).` +
+            (sp.flag === 'recovery_debt' ? ` ⚠ strain >16 on ${sp.high} day(s) — recovery debt building.` : ''),
+        );
+      }
     }
   }
 

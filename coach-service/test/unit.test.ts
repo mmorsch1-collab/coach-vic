@@ -158,25 +158,33 @@ describe('hrvDropStreak', () => {
 });
 
 describe('strainPattern (workout days only)', () => {
+  // Dates must be RECENT: strainPattern windows by days, not by row count.
+  const day = (i: number) => new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
   const rows = (strains: number[]): WhoopRow[] =>
     strains.map((strain, i) => ({
-      date: `2026-07-${String(26 - i).padStart(2, '0')}`,
-      recovery: 60, hrv: 60, rhr: 50, sleepHours: 7, strain,
+      date: day(i), recovery: 60, hrv: 60, rhr: 50, sleepHours: 7, strain,
     }));
-  const dates = (n: number) =>
-    new Set(Array.from({ length: n }, (_, i) => `2026-07-${String(26 - i).padStart(2, '0')}`));
+  const dates = (n: number) => new Set(Array.from({ length: n }, (_, i) => day(i)));
 
-  it('flags recovery debt on repeated >16 days', () => {
+  it('flags recovery debt on repeated >16 days (high readings are trustworthy)', () => {
     expect(strainPattern(rows([18, 17, 12, 12]), dates(4)).flag).toBe('recovery_debt');
-  });
-  it('flags undertrained when most workout days are <10', () => {
-    expect(strainPattern(rows([8, 8, 9, 13]), dates(4)).flag).toBe('undertrained');
   });
   it('says nothing in the 12–15 target band', () => {
     expect(strainPattern(rows([13, 14, 12, 13]), dates(4)).flag).toBeNull();
+    expect(strainPattern(rows([13, 14, 12, 13]), dates(4)).lowConfidence).toBe(false);
+  });
+  it('does NOT cry undertrained on morning-captured strain — marks low confidence', () => {
+    // Real observed WHOOP_History values: the morning job records strain-so-far.
+    const r = strainPattern(rows([1.46, 0.07, 0.09, 4.8]), dates(4));
+    expect(r.flag).toBeNull();
+    expect(r.lowConfidence).toBe(true);
   });
   it('ignores rest-day strain entirely', () => {
     expect(strainPattern(rows([18, 17, 18]), new Set<string>()).workoutDays).toBe(0);
+  });
+  it('ignores records older than the window', () => {
+    const stale = [{ date: '2026-01-01', recovery: 60, hrv: 60, rhr: 50, sleepHours: 7, strain: 18 }];
+    expect(strainPattern(stale, new Set(['2026-01-01'])).workoutDays).toBe(0);
   });
 });
 

@@ -222,8 +222,12 @@ function mean(xs: number[]): number {
 export function hrvDropStreak(rows: WhoopRow[], thresholdPct = 10): { days: number; dropPct: number } {
   let days = 0;
   let firstDrop = NaN;
-  // rows[0] = most recent. Day i needs 14 days of history behind it.
+  // WHOOP_History is appended opportunistically and has real gaps (and dupes),
+  // so "the last 14 ROWS" is not "the last 14 DAYS" — without this guard a
+  // 3-day streak could silently span months of sparse records.
   for (let i = 0; i + 14 <= rows.length; i++) {
+    const spanDays = daysSince(rows[i + 13].date) - daysSince(rows[i].date);
+    if (spanDays > 21) break; // too sparse to call a consecutive-day streak
     const cur = mean(rows.slice(i, i + 7).map((r) => r.hrv));
     const prior = mean(rows.slice(i + 7, i + 14).map((r) => r.hrv));
     if (!Number.isFinite(cur) || !Number.isFinite(prior) || prior <= 0) break;
@@ -237,28 +241,50 @@ export function hrvDropStreak(rows: WhoopRow[], thresholdPct = 10): { days: numb
 
 /**
  * Strain pattern on WORKOUT days only (rest-day strain is meaningless here).
- * Protocol: workout-day strain should sit ~12–15. Consistently <10 =
- * undertrained; >16 on multiple days = recovery debt accumulating.
+ * Protocol: workout-day strain should sit ~12–15. >16 on multiple days =
+ * recovery debt accumulating.
+ *
+ * ASYMMETRIC ON PURPOSE. WHOOP_History rows are written by the MORNING job, so
+ * the Strain cell holds strain-*so-far-at-~5am*, not the day's total (observed
+ * values of 0.07/1.46 on real training days). Low readings are therefore
+ * uninterpretable — they cannot distinguish "rest day", "easy session", and
+ * "captured before he trained". So:
+ *   - HIGH (>16) is trusted: a morning capture can never reach 16, so a high
+ *     reading is necessarily a real high-strain day.
+ *   - LOW (<10) is NOT flagged as undertrained — that fires on every
+ *     morning-captured row and would tell Matt to add intensity off an
+ *     artifact. `lowConfidence` marks the sample instead.
+ * If end-of-day strain capture is added later, drop `lowConfidence` and
+ * re-enable the undertrained branch.
  */
 export function strainPattern(
   rows: WhoopRow[],
   workoutDates: Set<string>,
   days = 14,
-): { workoutDays: number; low: number; high: number; avg: number; flag: 'undertrained' | 'recovery_debt' | null } {
-  const window = rows.slice(0, days).filter((r) => workoutDates.has(r.date) && Number.isFinite(r.strain));
+): {
+  workoutDays: number;
+  low: number;
+  high: number;
+  avg: number;
+  lowConfidence: boolean;
+  flag: 'recovery_debt' | null;
+} {
+  const window = rows
+    .filter((r) => daysSince(r.date) <= days)
+    .filter((r) => workoutDates.has(r.date) && Number.isFinite(r.strain));
   const low = window.filter((r) => r.strain < 10).length;
   const high = window.filter((r) => r.strain > 16).length;
   const avg = mean(window.map((r) => r.strain));
-  // Need a couple of workout days before calling a pattern anything.
-  let flag: 'undertrained' | 'recovery_debt' | null = null;
-  if (window.length >= 3 && low >= Math.ceil(window.length / 2)) flag = 'undertrained';
-  if (high >= 2) flag = 'recovery_debt'; // recovery debt outranks
+  // An average this far below a real training day means we are looking at
+  // morning snapshots, not day totals.
+  const lowConfidence = window.length > 0 && Number.isFinite(avg) && avg < 8;
   return {
     workoutDays: window.length,
     low,
     high,
     avg: Number.isFinite(avg) ? Math.round(avg * 10) / 10 : NaN,
-    flag,
+    lowConfidence,
+    flag: high >= 2 ? 'recovery_debt' : null,
   };
 }
 
