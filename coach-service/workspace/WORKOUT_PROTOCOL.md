@@ -21,10 +21,30 @@ Every workout follows this. No shortcuts, no standalone sheets.
 - Check muscle-group balance (have we hit chest 2x this week?) and weak/stalling lifts.
 
 ## Current program frame (job-transition window)
-- **5×/week lifting, Mon–Fri** — chest/back/shoulders/arms/legs split with **chest 2×/week**;
-  legs maintenance volume. Weekend: Zone-2 running/steps (recovery, not strain).
+- **5×/week lifting, Mon–Fri** — chest/back/shoulders/arms/legs split with **chest 2×/week**.
+  Weekend: Zone-2 running/steps (recovery, not strain).
 - Hockey on Friday nights (occasional — ask, and keep Friday's session joint-friendly).
 - This is the high-consistency window for the recomposition cut — protect it.
+
+## Weekly split & MAV targets (locked 2026-06-20)
+| Day | Focus | Target Sets |
+|---|---|---|
+| Mon | Chest + Triceps | Chest 10 · Triceps 10 |
+| Tue | Back + Biceps | Back 14 · Biceps 6 |
+| Wed | Shoulders | Shoulders 12 |
+| Thu | Chest 2nd hit + Biceps | Chest 6 · Biceps 6 |
+| Fri | Legs | Legs 10 |
+
+**Weekly MAV targets:**
+- Chest: 16 sets (MAV 16, MRV 20)
+- Back: 14 sets (MAV 14, MRV 20)
+- Shoulders: 12 sets (MAV 14, MRV 18)
+- Biceps: 12 sets (MAV 12, MRV 16)
+- Triceps: 10 sets (MAV 12, MRV 16)
+- Legs: 10 sets (MAV 10, MRV 14)
+
+**Volume autoregulation:** Matt provides fatigue feedback — dial back only when he reports it,
+not based on WHOOP color alone. He's running full tilt for 3 weeks; trust the feedback loop.
 
 ## Step 3 — Autoregulation (PERFORMANCE-primary, recovery-modifier)
 Do NOT cut weekly volume based on WHOOP color. Plan volume weekly per muscle; autoregulate
@@ -38,7 +58,7 @@ intensity. (See SCIENCE.md.)
 - **Session cap ~10 hard sets per muscle.** If the weekly landmark won't fit in one day, push the
   overflow to a second day (rear-delt/upper-back volume on shoulders day; chest's 2nd weekly hit
   as 3–4 sets on another upper day).
-- **Progression (double progression):** add reps to the top of the range → then load.
+- **Progression (double progression):** add reps to the top of the range → then load. **Readiness standard: the LAST set must hit the target rep range cleanly before increasing load — not the first set.** Set 1 almost always looks best due to freshness; use the back half of the session (sets 2–last) as the true readiness signal. Do NOT advance load when only the top set is hitting the target while later sets drop significantly.
   - **At the GYM (barbell/rack/machines/cables — NO cap):** progress load normally once reps hit
     the top of the range. This is the default for heavy compounds; prefer the gym for lifts that
     have outgrown home weights.
@@ -70,9 +90,11 @@ intensity. (See SCIENCE.md.)
   e1RM regresses across lifts while the multi-day recovery trend is down.
 
 ## Step 4 — Exercise preferences (honor these)
-- **EVERY session starts with the 6-minute plank routine** (non-negotiable, lower-back health):
-  1 min front / 1 min left side / 1 min right side, ×2 rounds, NO rest between. Put it at the
-  top of every workout sheet as the warm-up. Matt skips core → his lower back hurts.
+- **Core work is programmed deliberately on appropriate days** (not a daily plank routine).
+  Program 2–3 targeted core exercises (e.g., cable crunches, hanging leg raises, ab wheel,
+  pallof press, dead bugs) on days where it fits — typically not on the same day as heavy
+  compounds that already tax the core (e.g., heavy rows/deadlifts). Matt skips core → his
+  lower back hurts — so it must be explicitly programmed, not left to chance.
 - **Incline DB press instead of floor flys** (he dislikes floor flys).
 - Dumbbell-based when at home (working weights: bench ~45s, shoulder press ~25s).
 - One key lift tracked per session — give a target number to chase.
@@ -106,3 +128,110 @@ intensity. (See SCIENCE.md.)
 ## Home-gym backup
 If he likely missed the 5:30 gym, offer a 20-min home session matched to the split (HOME_GYM.md).
 A 20-min home session on a green day beats a rest day.
+## Expert Panel
+Every workout is reviewed through the lens of:
+- **Mike Israetel (RP Strength)** — volume landmarks, meso structure, SFR, fatigue management
+- **Jeff Nippard** — progressive overload mechanics, mind-muscle connection, exercise science
+- **Eric Helms** — evidence-based natural athlete protocols, muscle retention in a deficit
+- **Andy Galpin** — performance readiness, recovery science, HRV interpretation
+- **Layne Norton** — body recomposition, protein optimization, cut/maintain transitions
+
+All five would agree on the framework below. Where they diverge, the call is noted explicitly.
+
+## Weekly MAV Targets
+| Muscle | MEV | MAV | MRV |
+|---|---|---|---|
+| Chest | 8 | 16 | 20 |
+| Back | 10 | 14 | 20 |
+| Shoulders | 8 | 14 | 18 |
+| Biceps | 6 | 12 | 16 |
+| Triceps | 6 | 12 | 16 |
+| Legs | 6 | 10 | 14 |
+| Core | 4 | 8 | 12 |
+
+## Weekly Planning Rules (locked 2026-07-22)
+
+> **Standard applied from 2026-07-22 forward. These rules are non-negotiable and apply to every week.**
+
+1. **Calendar week reset.** Volume counts reset Monday. NEVER use a rolling 7-day window — scope all set counts to the current Mon–Sun calendar week only (America/New_York). `get_muscle_volume` returns exactly this window; its `sets_to_mav` is what's left to place this week.
+
+1a. **Ingest before you count.** Set counts are only as current as WORKOUT_DATABASE. If the snapshot shows an **INGEST GAP** warning (a `Workout_*` sheet exists for this week with no rows in the database), call `ingest_workout` for those dates **before** reporting any volume number or making an autoregulation call. Never report volume off a known-stale count — if a sheet was built but never trained, say that explicitly instead of counting it as volume.
+
+2. **Balanced daily load.** Each of the 5 sessions should carry a roughly equal number of hard sets. No day gets overloaded while another runs light. Flag and rebalance before building the sheet.
+
+3. **Logical muscle pairings.** Combine muscle groups that share movement patterns or allow one to recover while the other works (e.g., chest+triceps, back+biceps, shoulders standalone, legs+core). Never pair two heavily competing groups on the same day.
+
+4. **Hit MAV every week across all groups.** Before building any session, map the full week's set distribution across all muscle groups and confirm each one reaches MAV by Friday. If a group can't reach MAV given the split, flag and adjust.
+
+5. **Expert-level review on every workout.** Before building a sheet, pull `get_exercise_progression` on every planned lift. Review last session's load, reps, RIR, and e1RM trend. Apply double-progression logic. Apply the Israetel/Nippard/Helms SFR lens: right exercise, right order (compound-first), right load from real data. Never guess a target weight.
+
+6. **Plan the full week before building the day.** Map all 5 sessions at the start of the week. When building Wednesday's sheet, Thursday and Friday's planned sets are already scoped — day volume is never over or under.
+
+7. **No orphaned sets — map the whole week before building ANY sheet.** Before building a single
+   workout sheet, write out the full week's set distribution across **every** muscle group (Mon→Fri)
+   and verify each group lands exactly on MAV by Friday with **no fractional remainder**.
+   - **Minimum meaningful block = 3–4 sets per muscle per session.** Anything smaller is not a
+     training stimulus, it's bookkeeping.
+   - If a group has **1–3 sets left over after Thursday** that don't fit cleanly into Friday's
+     session, that is a **planning error, not a Friday problem**. Do not bolt an orphaned 2 sets
+     onto leg day to square the math.
+   - Fix it by **rebalancing earlier in the week** (shift the remainder back into Mon–Thu where the
+     group already has a block), not by padding Friday or silently dropping the sets.
+   - **Never build a single day in isolation.** If the full week isn't mapped, you are not ready to
+     build the sheet — map it first, then build.
+
+8. **Session date = sheet date (back-compat).** A session is attributed to the **date on the sheet /
+   in the WORKOUT_DATABASE Date cell**, never to the weekday label in a title or the day it was
+   *planned* for. Sheets named for one day but dated another (missed Monday trained Tuesday, a
+   rebuilt sheet, a weekend make-up) count toward the calendar week containing their **actual
+   date**. Consequences to honor:
+   - A "Monday Chest" sheet dated Tuesday counts as Tuesday — and if that Tuesday falls in the next
+     Mon–Sun week, its sets belong to that week, not the one it was planned in.
+   - A session dated Sunday belongs to the week that **started the previous Monday** (Sunday closes
+     the week; it does not open one).
+   - When a sheet's date doesn't match its expected weekday, say so explicitly rather than quietly
+     recounting — then plan the remaining days from the **actual** logged distribution.
+
+## Meso Structure & RIR Ramp
+
+| Week | RIR Target | Effort |
+|---|---|---|
+| W1 | 3 RIR | Controlled — stop when it gets hard |
+| W2 | 2 RIR | Pushing but not grinding |
+| W3 | 1–2 RIR | Close to the edge |
+| W4 | 0–1 RIR | Last set AMRAP, nothing hidden |
+| Deload | — | On signal (see below) |
+
+**RIR is a guide to effort, not a second rep target.** Target reps are the floor; RIR governs how far past the floor you go on the last set. They don't conflict.
+
+Every sheet is stamped with the meso week in the recovery/context line (e.g., "Recovery 89% · Meso W1").
+
+**AMRAP standard:** The last set of the key lift is always AMRAP at the week's RIR target. This is the primary progression signal — it determines whether load advances next session.
+
+## Deload Trigger (performance-based, not scheduled)
+
+Deload when ANY of these appear:
+- e1RM regressing on 2+ key lifts over 2+ consecutive sessions in the same week
+- Rep quality visibly declining (back half of sets dropping significantly vs. set 1)
+- Joints complaining
+- Matt flags it
+
+*Israetel prefers scheduled deloads (fatigue masks fitness); Nippard, Helms, and Norton support performance-based triggers for a well-calibrated athlete. Given Matt's self-awareness and rep-tracking discipline, performance-based is the call.*
+
+Deload execution: ~50% sets, ~60% load, nothing near failure.
+
+## SFR Audit (End of Each Meso — W4)
+Before building the deload week: review which exercises delivered best mind-muscle connection and stimulus vs. felt mechanical or created joint stress. Matt flags it; Coach Vic adjusts the next block's exercise selection accordingly.
+
+**Mind-muscle as a data point (Nippard):** After each session, note which exercise felt best. Over a meso this builds a preference map — bias toward exercises that consistently deliver strong mind-muscle connection and clean stimulus.
+
+## Warm-Up Protocol
+- **Upper body days:** straight into ramp sets on the key lift. No warm-up routine.
+- **Leg day (Friday):** PT warm-up protocol built into the sheet before any loading (prone press-ups, quadruped hip CARs, plank rocks), then into compounds. This is prehab — not counted toward core MAV sets.
+
+## Core Programming
+Core is programmed deliberately on Shoulders day (Wed) and Legs day (Fri) — not daily, always intentional. Target 2–3 exercises per session: cable crunches, hanging leg raises, ab wheel, pallof press, dead bugs.
+
+**Core MAV sets = anterior/lateral core work only** (cable crunches, hanging leg raises, ab wheel, dead bugs, pallof press). Lower back warm-up on Fri is prehab — not counted toward core MAV sets.
+
+Shoulders day is a clean pairing for core — no anterior core interference from pressing movements. Legs day core lands fresh after lower-body compounds.

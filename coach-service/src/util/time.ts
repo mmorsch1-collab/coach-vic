@@ -24,6 +24,54 @@ export function addDaysStr(date: string, n: number): string {
   return new Date(t + n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** Day-of-week index in the given tz: 0=Sun … 6=Sat. */
+export function weekdayInTz(tz: string, when: Date = new Date()): number {
+  const w = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(when);
+  return DOW.indexOf(w);
+}
+
+/**
+ * Day-of-week index (0=Sun … 6=Sat) for a "YYYY-MM-DD" string. Anchored at UTC
+ * noon so it is tz-independent: the label belongs to the DATE, not to a clock.
+ */
+export function weekdayOf(date: string): number {
+  const t = Date.parse(`${date}T12:00:00Z`);
+  return Number.isNaN(t) ? -1 : new Date(t).getUTCDay();
+}
+
+/** Short weekday label ("Mon") for a "YYYY-MM-DD" string; '' when unparseable. */
+export function weekdayLabel(date: string): string {
+  const i = weekdayOf(date);
+  return i >= 0 ? DOW[i] : '';
+}
+
+/**
+ * The strict Mon–Sun calendar week containing `when`, as inclusive
+ * "YYYY-MM-DD" bounds in `tz`.
+ *
+ * The protocol counts volume per CALENDAR week (resets Monday), not over a
+ * rolling 7-day window — a rolling window silently drags the previous week's
+ * Friday sets into Monday's count and corrupts autoregulation decisions.
+ * Sunday (dow 0) belongs to the week that started the previous Monday, i.e.
+ * 6 days back, not the day after tomorrow.
+ */
+export function calendarWeek(tz: string, when: Date = new Date()): { start: string; end: string } {
+  const today = todayStr(tz, when);
+  const dow = weekdayInTz(tz, when);
+  const backToMonday = dow === 0 ? 6 : dow - 1;
+  const start = addDaysStr(today, -backToMonday);
+  return { start, end: addDaysStr(start, 6) };
+}
+
+/** Local hour (0–23) in `tz` for an ISO timestamp; NaN when unparseable. */
+export function hourOfTimestamp(iso: string, tz: string): number {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return NaN;
+  return hourInTz(tz, new Date(t));
+}
+
 /** Human-readable local time, e.g. "Mon Jun 8, 6:52 AM". */
 export function nowInTz(tz: string, when: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-US', {

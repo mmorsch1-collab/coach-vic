@@ -10,10 +10,10 @@ import {
 } from '../memory/store.js';
 import { invalidateSystemCache } from './systemPrompt.js';
 import { appendEntry, DB_FILES, type DbFile } from '../memory/databases.js';
-import { todayStr } from '../util/time.js';
+import { todayStr, calendarWeek } from '../util/time.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
-import { e1rm, exerciseSeries, parseWorkoutDb, weeklyHardSets, slopePerWeek, VOLUME_BANDS, bestE1rmBefore } from '../coaching/metrics.js';
+import { e1rm, exerciseSeries, parseWorkoutDb, hardSetsInRange, sessionDatesInRange, slopePerWeek, VOLUME_BANDS, bestE1rmBefore } from '../coaching/metrics.js';
 import { invalidateSnapshot } from '../coaching/snapshot.js';
 import { logMeal, PROTEIN_TARGET_G } from '../coaching/nutrition.js';
 import { ingestWorkout, annotateCompletion } from '../coaching/workoutIngest.js';
@@ -329,8 +329,11 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'get_muscle_volume',
     description:
-      'Weekly hard-set count per muscle group (last 7 days) vs evidence-based landmarks ' +
-      '(MEV/MAV/MRV), to balance the split and avoid under/over-training.',
+      'Hard-set count per muscle group for the CURRENT Mon–Sun calendar week (America/New_York, ' +
+      'resets every Monday — NOT a rolling 7-day window) vs evidence-based landmarks ' +
+      '(MEV/MAV/MRV), plus sets_to_mav remaining. Use to balance the split, map the rest of the ' +
+      'week, and avoid under/over-training. Counts are stale if a workout sheet for this week ' +
+      'has not been ingested — check the snapshot ingest warning and call ingest_workout first.',
     input_schema: { type: 'object', properties: {} },
   },
   {
@@ -599,13 +602,33 @@ export async function executeTool(
       case 'get_muscle_volume': {
         const rows = await bridge.readSheet('WORKOUT_DATABASE');
         const logs = parseWorkoutDb(rows as unknown[][]);
-        const hs = weeklyHardSets(logs, 7);
-        const result = Object.keys(VOLUME_BANDS).map((m) => {
+        // STRICT Mon–Sun calendar week (protocol rule 1), NOT a rolling 7 days:
+        // a rolling window drags last week's Fri/Sat sets into Monday's count.
+        const week = calendarWeek(config.tz);
+        const hs = hardSetsInRange(logs, week.start, week.end);
+        const muscles = Object.keys(VOLUME_BANDS).map((m) => {
           const n = hs[m] || 0;
           const b = VOLUME_BANDS[m];
-          return { muscle: m, hard_sets_7d: n, ...b, status: n < b.mev ? 'under' : n > b.mrv ? 'over' : 'in_range' };
+          return {
+            muscle: m,
+            hard_sets_this_week: n,
+            ...b,
+            sets_to_mav: Math.max(0, b.mav - n),
+            status: n < b.mev ? 'under' : n > b.mrv ? 'over' : 'in_range',
+          };
         });
-        return json(result);
+        return json({
+          week_start_monday: week.start,
+          week_end_sunday: week.end,
+          timezone: config.tz,
+          sessions_logged: sessionDatesInRange(logs, week.start, week.end),
+          note:
+            'Counts are for the CURRENT Mon–Sun calendar week only and reset each Monday. ' +
+            'Sessions are attributed by their logged DATE, not a weekday label. If a workout ' +
+            'sheet for this week has not been ingested yet these counts are stale — check the ' +
+            'snapshot ingest warning and call ingest_workout first.',
+          muscles,
+        });
       }
       case 'get_bodycomp_trend': {
         const rows = (await bridge.readSheet('BODY_COMPOSITION')) as unknown[][];

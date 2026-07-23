@@ -1,16 +1,25 @@
 import { bridge } from '../bridge/client.js';
+import { config } from '../config.js';
 import { logger } from '../logger.js';
+import { assessWhoop } from '../scheduler/gating.js';
 import {
   parseWorkoutDb,
   exerciseSeries,
   slopePerWeek,
-  weeklyHardSets,
+  hardSetsInRange,
+  sessionDatesInRange,
   muscleOf,
   daysSince,
+  hrvDropStreak,
+  strainPattern,
+  regressingLifts,
+  muscleRetentionAlarm,
   VOLUME_BANDS,
   type SetLog,
+  type WhoopRow,
 } from './metrics.js';
 import { todayProteinLine, proteinTrendLine } from './nutrition.js';
+import { calendarWeek, weekdayLabel, hourOfTimestamp, todayStr, hourInTz } from '../util/time.js';
 
 /**
  * The always-loaded coaching SNAPSHOT — a compact digest of Matt's current
@@ -21,6 +30,12 @@ import { todayProteinLine, proteinTrendLine } from './nutrition.js';
 
 let cache: { text: string; at: number } | null = null;
 const TTL_MS = 10 * 60 * 1000;
+
+/** Miami-goal timeline anchor (GOAL.md) — drives the 4-weekly body-comp review. */
+const MIAMI_ANCHOR = '2026-07-18';
+/** Goal cut rate (GOAL.md): 0.5–0.75 lb/week. */
+const TARGET_LOSS_MIN = 0.5;
+const TARGET_LOSS_MAX = 0.75;
 
 export function invalidateSnapshot(): void {
   cache = null;
@@ -36,27 +51,50 @@ function parseGeneric(rows: unknown[][]): Array<Record<string, string>> {
   });
 }
 const num = (v: string) => (v && Number.isFinite(Number(v)) ? Number(v) : NaN);
+const sign = (n: number, d = 1) => `${n >= 0 ? '+' : ''}${n.toFixed(d)}`;
+
+/**
+ * Numeric value of the first header containing EVERY given substring (headers
+ * are lowercased by parseGeneric). BODY_COMPOSITION was hand-created, so its
+ * exact column spellings aren't guaranteed — match tolerantly rather than
+ * hard-coding a name and silently reading NaN forever.
+ */
+function field(row: Record<string, string>, ...parts: string[]): number {
+  const k = Object.keys(row).find((h) => parts.every((p) => h.includes(p)));
+  return k ? num(row[k]) : NaN;
+}
+/** Body-fat %, never "fat free mass" / "visceral fat" (same rule as get_bodycomp_trend). */
+function bodyFat(row: Record<string, string>): number {
+  const bf = field(row, 'body', 'fat');
+  return Number.isFinite(bf) ? bf : field(row, 'fat', '%');
+}
 
 export async function buildSnapshot(): Promise<string> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.text;
 
-  const [wdb, whoop, bcomp, goals] = await Promise.all([
+  const [wdb, whoop, bcomp, goals, tabs, whoopToday, wHist] = await Promise.all([
     bridge.readSheet('WORKOUT_DATABASE').catch(() => [] as unknown[][]),
     bridge.readSheet('WHOOP_History').catch(() => [] as unknown[][]),
     bridge.readSheet('BODY_COMPOSITION').catch(() => [] as unknown[][]),
     bridge.getGoals().catch(() => [] as unknown[]),
+    bridge.listSheets().catch(() => [] as Array<{ title: string }>),
+    assessWhoop(2).catch(() => null),
+    bridge.withingsHistory(21).catch(() => [] as unknown),
   ]);
 
+  const week = calendarWeek(config.tz);
   const lines: string[] = ['===== COACHING SNAPSHOT (computed; your working memory of Matt) ====='];
+  lines.push(`Calendar week (volume scope): Mon ${week.start} → Sun ${week.end} (${config.tz}).`);
 
-  // ---- Training: key lifts + per-muscle weekly volume ----
+  // ---- Training: key lifts + per-muscle CALENDAR-WEEK volume ----
   const logs: SetLog[] = parseWorkoutDb(wdb as unknown[][]);
+  let keyLifts: string[] = [];
   if (logs.length) {
     // Key lifts = most-logged exercises in the last 35 days.
     const recent = logs.filter((l) => daysSince(l.date) <= 35);
     const freq: Record<string, number> = {};
     recent.forEach((l) => (freq[l.exercise] = (freq[l.exercise] || 0) + 1));
-    const keyLifts = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([e]) => e);
+    keyLifts = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([e]) => e);
 
     lines.push('Key lifts (e1RM trend = est. 1RM change/week):');
     for (const lift of keyLifts) {
@@ -66,19 +104,19 @@ export async function buildSnapshot(): Promise<string> {
       const slope = slopePerWeek(s.slice(-6).map((p) => ({ date: p.date, y: p.topE1rm })));
       const arrow = slope > 0.5 ? '↑' : slope < -0.5 ? '↓' : '→';
       lines.push(
-        `  • ${lift}: ${last.weight}lb×${last.topReps} (e1RM ${last.topE1rm}) ${arrow} ${slope >= 0 ? '+' : ''}${slope.toFixed(1)}/wk, ${daysSince(last.date)}d ago`,
+        `  • ${lift}: ${last.weight}lb×${last.topReps} (e1RM ${last.topE1rm}) ${arrow} ${sign(slope)}/wk, ${daysSince(last.date)}d ago`,
       );
     }
 
-    const hs = weeklyHardSets(logs, 7);
-    const muscles = Object.keys(VOLUME_BANDS);
-    const volLine = muscles.map((m) => {
+    // CALENDAR-week hard sets (Mon–Sun), NOT a rolling 7-day window.
+    const hs = hardSetsInRange(logs, week.start, week.end);
+    const volLine = Object.keys(VOLUME_BANDS).map((m) => {
       const n = hs[m] || 0;
       const b = VOLUME_BANDS[m];
       const flag = n < b.mev ? '⚠low' : n > b.mrv ? '⚠high' : 'ok';
-      return `${m} ${n}(${flag})`;
+      return `${m} ${n}/${b.mav}(${flag})`;
     });
-    lines.push(`Weekly hard sets vs landmarks: ${volLine.join(', ')}`);
+    lines.push(`Hard sets THIS CALENDAR WEEK vs MAV: ${volLine.join(', ')}`);
 
     // Days since each muscle trained.
     const lastByMuscle: Record<string, string> = {};
@@ -90,39 +128,226 @@ export async function buildSnapshot(): Promise<string> {
       'Days since trained: ' +
         Object.entries(lastByMuscle).map(([m, d]) => `${m} ${daysSince(d)}d`).join(', '),
     );
-    const sessions7 = new Set(logs.filter((l) => daysSince(l.date) <= 7).map((l) => l.date)).size;
-    lines.push(`Sessions last 7d: ${sessions7}`);
+    const wkDates = sessionDatesInRange(logs, week.start, week.end);
+    lines.push(
+      `Sessions logged this week: ${wkDates.length}` +
+        (wkDates.length ? ` (${wkDates.map((d) => `${weekdayLabel(d)} ${d}`).join(', ')})` : ''),
+    );
   } else {
     lines.push('Training: no WORKOUT_DATABASE history yet.');
   }
 
-  // ---- Recovery (WHOOP_History) ----
-  const whoopRows = parseGeneric(whoop as unknown[][])
-    .filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r['date']))
-    .sort((a, b) => b['date'].localeCompare(a['date']));
-  if (whoopRows.length) {
-    const last7 = whoopRows.slice(0, 7);
-    const avg = (k: string) => {
-      const xs = last7.map((r) => num(r[k])).filter(Number.isFinite);
-      return xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : NaN;
-    };
-    const recSlope = slopePerWeek(whoopRows.slice(0, 14).map((r) => ({ date: r['date'], y: num(r['recovery']) })));
-    lines.push(
-      `Recovery: 7d avg ${avg('recovery')}% (${recSlope >= 0 ? '+' : ''}${recSlope.toFixed(1)}/wk), HRV 7d ${avg('hrv')}, sleep 7d ${avg('sleep hours')}h. Latest ${whoopRows[0]['date']}: rec ${whoopRows[0]['recovery']}%.`,
-    );
+  // ---- INGEST AUDIT: sheets built this week with nothing in the database ----
+  // Silent stale data is worse than a visible warning: without this, volume
+  // counts read low and the coach autoregulates off numbers Matt already beat.
+  {
+    const dbDates = new Set(logs.map((l) => l.date));
+    const weekTabs = (Array.isArray(tabs) ? tabs : [])
+      .map((t) => String((t as { title?: string })?.title ?? ''))
+      .map((title) => ({ title, date: /^Workout_(\d{4}-\d{2}-\d{2})$/.exec(title)?.[1] }))
+      // Attribute by the SHEET'S DATE, never a weekday label in the title.
+      .filter((t): t is { title: string; date: string } => !!t.date && t.date >= week.start && t.date <= week.end);
+    const unIngested = weekTabs.filter((t) => !dbDates.has(t.date)).sort((a, b) => a.date.localeCompare(b.date));
+    if (unIngested.length) {
+      lines.push(
+        `⚠ INGEST GAP — Workout sheet(s) exist for this week with NO rows in WORKOUT_DATABASE: ` +
+          unIngested.map((t) => `${t.title} (${weekdayLabel(t.date)})`).join(', ') +
+          `. The set counts above are STALE and under-count. Call ingest_workout for these dates ` +
+          `BEFORE reporting volume or making an autoregulation call. If a sheet was built but never ` +
+          `trained, say so explicitly rather than treating it as volume.`,
+      );
+    }
   }
 
-  // ---- Body composition ----
-  const bcRows = parseGeneric(bcomp as unknown[][])
-    .filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r['date']) && Number.isFinite(num(r['weight_lbs'])));
-  if (bcRows.length) {
-    const sorted = bcRows.sort((a, b) => b['date'].localeCompare(a['date']));
-    const latest = sorted[0];
-    const wSlope = slopePerWeek(sorted.slice(0, 21).map((r) => ({ date: r['date'], y: num(r['weight_lbs']) })));
-    const bf = sorted.map((r) => num(r['body_fat_%'])).filter(Number.isFinite)[0];
+  // ---- Recovery / WHOOP ----
+  const whoopRows: WhoopRow[] = parseGeneric(whoop as unknown[][])
+    .filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r['date']))
+    .sort((a, b) => b['date'].localeCompare(a['date']))
+    .map((r) => ({
+      date: r['date'],
+      recovery: num(r['recovery']),
+      hrv: num(r['hrv']),
+      rhr: num(r['resting hr']),
+      sleepHours: num(r['sleep hours']),
+      strain: num(r['strain']),
+    }));
+
+  // TODAY, from the live WHOOP API. Recovery coaching requires score_state ===
+  // SCORED and TODAY's score — never yesterday's.
+  //
+  // The <2h freshness gate is the MORNING-BRIEFING standard: WHOOP scores once
+  // after waking, so by mid-morning today's legitimately-scored recovery is
+  // always >2h old. Applying 2h all day would blank recovery coaching from ~2h
+  // after wake onward (the same trap gating.ts documents for the day-part
+  // check-ins). So: strict 2h through the briefing window (workout hour + 2,
+  // covering the 5:15-equivalent run and its fallback), SCORED + same-day after
+  // that, with the age stated so the coach can weigh it.
+  {
+    const meta = whoopToday?.data?.recovery?.metadata;
+    const scored = meta?.score_state === 'SCORED';
+    const updatedAt = meta?.updated_at;
+    const ageH = updatedAt ? (Date.now() - Date.parse(updatedAt)) / 3_600_000 : NaN;
+    const whoopDate = whoopToday?.data?.date;
+    const isToday = !/^\d{4}-\d{2}-\d{2}$/.test(String(whoopDate)) || whoopDate === todayStr(config.tz);
+    const workoutHour = Number(config.workoutTime.split(':')[0]);
+    const inBriefingWindow = hourInTz(config.tz) <= workoutHour + 2;
+    const freshEnough = inBriefingWindow ? Number.isFinite(ageH) && ageH <= 2 : true;
+    const usable = !!whoopToday?.ok && scored && isToday && freshEnough;
+
+    if (usable) {
+      const d = whoopToday!.data;
+      const age = Number.isFinite(ageH) ? `${ageH.toFixed(1)}h old` : 'age unknown';
+      lines.push(
+        `WHOOP today (SCORED, ${age}): recovery ${whoopToday!.recovery ?? '?'}% (${whoopToday!.color}), ` +
+          `HRV ${d?.recovery?.hrv ?? '?'}ms, RHR ${d?.recovery?.restingHeartRate ?? '?'}, ` +
+          `sleep ${d?.sleep?.durationHours ?? '?'}h, strain ${whoopToday!.strain ?? '?'}.`,
+      );
+    } else {
+      const why = !whoopToday?.ok
+        ? (whoopToday?.reason ?? 'fetch failed')
+        : !scored
+          ? `score_state=${meta?.score_state ?? 'missing'} (not SCORED)`
+          : !isToday
+            ? `data is for ${whoopDate}, not today`
+            : `updated_at ${Number.isFinite(ageH) ? `${ageH.toFixed(1)}h` : 'unknown'} old (>2h at briefing time)`;
+      lines.push(
+        `⚠ WHOOP today UNUSABLE — ${why}. SKIP RECOVERY COACHING ENTIRELY this session: no ` +
+          `recovery %, no readiness call, no "your HRV says…", no strain commentary. Never ` +
+          `substitute yesterday's score for today's. Coach off logged performance instead, and ` +
+          `if recovery is genuinely needed, say the data isn't in yet.`,
+      );
+    }
+  }
+
+  if (whoopRows.length) {
+    const last7 = whoopRows.slice(0, 7);
+    const avg = (pick: (r: WhoopRow) => number) => {
+      const xs = last7.map(pick).filter(Number.isFinite);
+      return xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : NaN;
+    };
+    // Multi-day trend is the intensity-modifier signal — never a single day.
+    const recSlope = slopePerWeek(whoopRows.slice(0, 14).map((r) => ({ date: r.date, y: r.recovery })));
     lines.push(
-      `Body comp: ${latest['weight_lbs']}lb${Number.isFinite(bf) ? `, ~${bf}% BF` : ''} (latest ${latest['date']}). Weight trend ${wSlope >= 0 ? '+' : ''}${wSlope.toFixed(2)} lb/wk.`,
+      `Recovery trend (multi-day — THIS is the intensity modifier, not any single day): ` +
+        `7d avg ${avg((r) => r.recovery)}% (${sign(recSlope)}/wk), HRV 7d ${avg((r) => r.hrv)}ms, ` +
+        `RHR 7d ${avg((r) => r.rhr)}, sleep 7d ${avg((r) => r.sleepHours)}h.`,
     );
+
+    const drop = hrvDropStreak(whoopRows);
+    if (drop.days >= 3) {
+      lines.push(
+        `⚠ HRV 7d avg down ${drop.dropPct}% for ${drop.days} consecutive days. This is an ` +
+          `INTENSITY MODIFIER ONLY — cap intensity, hold sets, watch rep quality. It is NOT the ` +
+          `muscle-retention alarm and must never be reported as muscle loss on its own.`,
+      );
+    } else if (drop.days > 0) {
+      lines.push(`HRV 7d avg down ${drop.dropPct}% for ${drop.days}d (<3d — noise, do not act).`);
+    }
+
+    const workoutDates = new Set(logs.map((l) => l.date));
+    const sp = strainPattern(whoopRows, workoutDates);
+    if (sp.workoutDays > 0) {
+      const note =
+        sp.flag === 'recovery_debt'
+          ? ` ⚠ strain >16 on ${sp.high} day(s) — recovery debt building.`
+          : sp.flag === 'undertrained'
+            ? ` ⚠ strain <10 on ${sp.low}/${sp.workoutDays} workout days — undertrained, intensity left on the table.`
+            : '';
+      lines.push(`Workout-day strain (last 14d): avg ${sp.avg} over ${sp.workoutDays} days (target ~12–15).${note}`);
+    }
+  }
+
+  // ---- Body composition / Withings ----
+  const bcRows = parseGeneric(bcomp as unknown[][])
+    .filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r['date']) && Number.isFinite(field(r, 'weight')))
+    .sort((a, b) => b['date'].localeCompare(a['date']));
+  let weightSlope = NaN;
+  let muscleSlope = NaN;
+  if (bcRows.length) {
+    const latest = bcRows[0];
+    weightSlope = slopePerWeek(bcRows.slice(0, 21).map((r) => ({ date: r['date'], y: field(r, 'weight') })));
+    const bfRow = bcRows.find((r) => Number.isFinite(bodyFat(r)));
+    const bf = bfRow ? bodyFat(bfRow) : NaN;
+    lines.push(
+      `Body comp: ${field(latest, 'weight')}lb (measured ${latest['date']})` +
+        (Number.isFinite(bf) ? `, ${bf}% BF (measured ${bfRow!['date']})` : ', BF% unavailable') +
+        '.',
+    );
+
+    // Rate vs the Miami goal band (loss is a NEGATIVE slope).
+    const lossRate = -weightSlope;
+    const rateNote =
+      !Number.isFinite(weightSlope)
+        ? 'insufficient data'
+        : lossRate < 0
+          ? `GAINING ${Math.abs(lossRate).toFixed(2)} lb/wk — not in deficit`
+          : lossRate < TARGET_LOSS_MIN
+            ? `below the ${TARGET_LOSS_MIN}–${TARGET_LOSS_MAX} lb/wk target band (slow)`
+            : lossRate > TARGET_LOSS_MAX
+              ? `⚠ ABOVE the ${TARGET_LOSS_MIN}–${TARGET_LOSS_MAX} lb/wk band — too fast, muscle risk`
+              : `on target (${TARGET_LOSS_MIN}–${TARGET_LOSS_MAX} lb/wk)`;
+    lines.push(`21d weight slope: ${sign(weightSlope, 2)} lb/wk → ${rateNote}.`);
+
+    // Muscle mass: 2-week TREND only — single readings are glycogen/hydration noise.
+    const mmPts = bcRows
+      .filter((r) => daysSince(r['date']) <= 14 && Number.isFinite(field(r, 'muscle')))
+      .map((r) => ({ date: r['date'], y: field(r, 'muscle') }));
+    if (mmPts.length >= 3) {
+      muscleSlope = slopePerWeek(mmPts);
+      const dir = muscleSlope < -0.1 ? '⚠ DOWN' : muscleSlope > 0.1 ? 'up' : 'flat';
+      lines.push(`Muscle mass 2wk trend: ${sign(muscleSlope, 2)} lb/wk (${dir}, ${mmPts.length} readings).`);
+    } else {
+      lines.push(`Muscle mass 2wk trend: insufficient readings (${mmPts.length}) — do not infer a direction.`);
+    }
+
+    // 4-weekly formal body-comp review against the Miami timeline.
+    const weeksIn = Math.floor(daysSince(MIAMI_ANCHOR) / 7);
+    if (weeksIn >= 4 && weeksIn % 4 === 0) {
+      lines.push(
+        `📋 MONTHLY BODY COMP REVIEW DUE (week ${weeksIn} of the Miami timeline). Run the formal ` +
+          `check-in: BF% + muscle mass trend vs the ~0.3–0.5% BF/month reduction target, and ` +
+          `whether the cut rate still fits the Dec 29 date.`,
+      );
+    }
+  }
+
+  // Measurement-timing hygiene: scattered weigh-in times add noise to the slope.
+  {
+    const hist = Array.isArray(wHist) ? (wHist as Array<{ date?: string }>) : [];
+    const hours = hist
+      .map((h) => hourOfTimestamp(String(h?.date ?? ''), config.tz))
+      .filter((h) => Number.isFinite(h));
+    if (hours.length >= 5) {
+      const morning = hours.filter((h) => h >= 4 && h <= 11).length;
+      const pct = Math.round((morning / hours.length) * 100);
+      if (pct < 70) {
+        lines.push(
+          `⚠ Weigh-in timing inconsistent: only ${pct}% of the last ${hours.length} Withings ` +
+            `readings were morning (4–11am). Scattered timing adds noise to the weight slope — ` +
+            `treat the trend as lower-confidence and mention consistent morning weigh-ins ` +
+            `(post-void, pre-food) when discussing it.`,
+        );
+      }
+    }
+  }
+
+  // ---- Muscle-retention alarm: ALL THREE conditions, never fewer ----
+  {
+    const regressing = regressingLifts(logs, keyLifts);
+    const alarm = muscleRetentionAlarm({ regressing, muscleMassSlope: muscleSlope, weightSlope });
+    if (alarm.firing) {
+      lines.push(
+        `🚨 MUSCLE-RETENTION ALARM — all three conditions met (${alarm.met.join('; ')}): ` +
+          `e1RM regressing on ${regressing.join(', ')}, muscle mass down over 2wk, weight dropping. ` +
+          `Action: raise protein toward 1.2g/lb, shrink the deficit toward maintenance, cut cardio. ` +
+          `If regression continues, end the cut.`,
+      );
+    } else if (alarm.met.length) {
+      lines.push(
+        `Muscle-retention watch (NOT the alarm — needs all 3): met [${alarm.met.join('; ')}], ` +
+          `missing [${alarm.missing.join('; ')}]. Do NOT tell Matt he is losing muscle on a partial signal.`,
+      );
+    }
   }
 
   // ---- Goals ----
