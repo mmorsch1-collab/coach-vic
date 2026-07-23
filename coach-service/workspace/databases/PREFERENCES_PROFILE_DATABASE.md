@@ -152,3 +152,53 @@
 **Why it matters:** When Matt skips core work, lower back pain returns — a clear body signal. This is a stability anchor for his training structure, not optional.
 
 **Implementation:** Build it into every workout tab's warm-up section automatically. Non-negotiable warm-up, before the main lift.
+
+## pref_044 — Meal patterns (June 2026)
+Matt shares meals naturally (not macro-tracking obsessive) for accountability. Prefers concrete fixes ("a shake or cottage cheese before bed") to generic macros. Responds well to one-number targets (165g protein/day) and real-time tallies during the day.
+
+## pref_018 — Snack hierarchy during the cut
+**High-protein, low-calorie snacks (prioritize in deficit):**
+- Greek yogurt (already doing — keep it)
+- Cottage cheese (~25g protein/cup)
+- Hard-boiled eggs
+- Deli turkey/chicken slices
+- Protein shakes (most efficient gap-closer)
+
+**Okay but not ideal (calorie-dense from fat; use occasionally, not as primary protein source):**
+- Meat sticks
+- Cheese
+- Peanut butter
+
+During the cut (300–400 kcal deficit), Matt's focus is high protein-to-calorie ratio. Fat-heavy sources should be occasional, not the go-to protein snack. Confirmed 2026-06-18.
+
+## pref_011 — Body-weight weighting protocol
+Matt weighs himself first thing after morning piss, before coffee or food — consistency matters more than which reading is "lower." Daily bounce (~1–2 lb) is water/food mass/waste, not fat. Trend over 21 days is the real signal. This is his settled protocol.
+
+## pref_045 — No calorie tracking; intuitive eating (2026-06-23)
+**Preference:** Matt does NOT want to count or track calories — at all. He trusts his own judgment of healthy vs. unhealthy and will adjust intake by feel. **Do NOT suggest calorie tracking, daily calorie targets, or logging intake.** Hold the protein target (165g+) as the one number that matters; everything else is "eat clean, lean protein first, trim the junk." Strength: Strong (explicit, 2026-06-23).
+
+**Context (2026-06-23):** Numbers show he's effectively at **maintenance, not a real deficit** — weight flat ~152.8 lb and BF ~12.3% over ~2–3 weeks despite eating healthy, because hitting 165g+ protein keeps intake up. He's fine with this, feels good, and will "tinker" calories down intuitively (e.g. milk→water in shakes, leaner beef) while holding protein high. Recovery is elite (98% on 2026-06-23, 9.2h sleep) — fully supports the full-MAV push. No drastic diet changes wanted.
+
+## pref_012 — Split autonomy + self-correction
+**Date:** 2026-07-02. Matt proactively identified triceps shortfall and asked to redistribute volume across the week, then requested I build workouts to hit MAV exactly. He also pivoted legs → chest/triceps → legs again to optimize the schedule.
+
+**Preference:** Give Matt the weekly target numbers and muscle groups; let him decide the daily order/distribution. He's thoughtful and will self-correct if balance is off. Respect his autonomy here — it increases ownership.
+
+## pref_024 — Evening protein: cottage cheese + sweet prep
+When closing protein targets late at night, Matt prefers **cottage cheese with a sweet prep** over savory:
+- Honey + blueberries or banana
+- Honey + cinnamon (if no fresh fruit)
+
+Use this as the first-line suggestion for evening protein closes. Yields ~20g protein, ~100 cal, satisfies the sweet craving, and feels "right" for bedtime.
+
+## pref_038 — office snack hierarchy
+Matt keeps non-perishable protein sources in his desk drawer: builder bars, beef jerky, and cheese. Hierarchy for protein filling (most to least efficient): jerky > builder bar > Luna bar > cheese. Jerky is his goto for high-protein-per-calorie gap closure. Bars are convenient backups for busy days; cheese is occasional complement, not primary. This is his stable, repeatable system for hitting 165g/day during work hours.
+
+## pref_025 — Protein-centric meal template (sustainable deficit)
+Matt's working template: Greek yogurt or cottage cheese breakfast (~20g) + double protein shake post-workout (56g) + protein-anchored lunch (~40g) + protein-anchored dinner (~40g) = ~155–165g total. This is sustainable and satisfies him without bland food or excessive shakes. Goal is to redirect snacking to protein-first options (turkey, cottage cheese, yogurt) rather than eliminate snacking entirely.
+
+## pref_017 — Core: deliberate programming, not daily plank routine (2026-07-21)
+Matt replaced the mandatory 6-min daily plank warm-up with deliberate core exercises programmed on appropriate days. Lower back health is still the driver — core work must be explicitly scheduled (not skipped), just not the same rote circuit every session. Good candidates: cable crunches, hanging leg raises, ab wheel, pallof press, dead bugs. Avoid heavy core on days with heavy compound rows/deadlifts (already taxes core).
+
+## pref_018 — Lower back warm-up is leg day only (2026-07-22)
+Matt does NOT do a lower back warm-up before every session. The PT-vetted protocol (chin retractions, prone press-ups, quadruped hip CARs, half-kneeling TSP rotations, plank rocks) is reserved for **leg day only** — programmed explicitly in the leg day sheet as a warm-up block before any loading. No daily plank routine, no daily lower-back warm-up. Upper body days start directly with ramp sets on the key lift. Supersedes pref_008, pref_016, pref_017.

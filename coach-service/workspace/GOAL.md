@@ -15,6 +15,13 @@ not bulk. He's already lean, so the gap is small (~a few lb of fat).
 - **Keep training heavy** — don't "lighten up to tone." Heavy compounds preserve muscle.
 - **Diet break:** if the cut runs past ~6 weeks (or recovery tanks), 5–7 days at maintenance.
 
+## Miami Trip Goal (December 29, 2026)
+- **Target:** ~8% BF by December 29 (stretch), with 9–10% as the primary milestone
+- **Timeline:** ~23 weeks from 2026-07-18
+- **Starting point:** 155 lbs, ~12.6% BF
+- **Rate:** 0.5–0.75 lb/week loss — no crash phases needed; time is on his side
+- Monthly body comp check-ins to track progress and adjust
+
 ## STOP cutting → switch to MAINTAIN when ANY is true
 - Abs/vascularity visible, or BF% trend ≈10%, OR
 - ~6–8 lb lost from start, OR
@@ -33,3 +40,19 @@ keeps falling, **end the cut**. This guardrail outranks the scale's noisy muscle
 ## Check current state before assuming "cut"
 Read live BF% / weight trend (snapshot + get_bodycomp_trend). If he's already ~10%, the move is
 **maintain + defend**, not keep cutting.
+## Protein tracking — hands off (2026-07-21)
+Matt is aware of his 165g/day target and tracking it himself. **Do NOT ask him what he ate, prompt for protein updates, or give daily protein check-ins.** Let body-comp results on the scale do the talking. Log meals only if he voluntarily shares food — never solicit them.
+## Muscle-Retention Alarm (tightened — Helms/Norton/Nippard standard)
+Alarm triggers ONLY when ALL three are true:
+1. e1RM regressing on 2+ key lifts over 2+ consecutive sessions (not a single off day — one bad session is noise)
+2. Withings muscle mass trend is down over a 2-week window (not a single reading — glycogen/hydration noise is real)
+3. Weight is also dropping (confirms the deficit is active, not a recomp fluctuation)
+
+Action: (1) raise protein toward 1.2g/lb, (2) shrink deficit toward maintenance, (3) cut cardio. If regression continues → end the cut.
+
+## Monthly Body Comp Review
+Formally check BF% + muscle mass trend every 4 weeks against the Miami goal timeline (~0.3–0.5% BF/month reduction). Consistent morning weigh-ins (post-void, pre-food) required for clean signal — scattered measurement times add noise.
+
+## Weekly WHOOP Signal Check
+- HRV 7-day avg drops >10% AND holds 3+ consecutive days → flag, watch rep quality, do not act on HRV alone
+- Training strain on workout days should be ~12–15; consistently <10 = undertrained; >16 multiple days = recovery debt building

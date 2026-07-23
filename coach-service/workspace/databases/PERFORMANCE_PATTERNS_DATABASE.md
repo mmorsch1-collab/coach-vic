@@ -140,3 +140,104 @@
 **Insight:** Accessory targets were too aggressive; volume was mismatched to capacity. Actual working weights: flat DB bench ~50 lbs, incline DB press ~35 lbs. Next session will dial volume to match.
 
 **Key point for future sessions:** Don't jump load aggressively mid-session when primary lift reps are solid — stick to the weight/rep range and add volume with good execution instead.
+
+## perf_038 — Protein gaps at dinner
+Matt's hitting mid-range mornings (protein shake + roast beef sandwich ~80g by early evening) but pizza/lasagna dinners don't close the 165g target. Evening cottage cheese or a second shake is a reliable patch. Pattern: he needs 50g+ after dinner to land the daily goal on mixed-carb-heavy meals.
+
+## pp_015 — Protein gap: evening awareness but no active closure
+Matt is consistently finishing 40–50g short of 165g/day (hit target 1/6 days in snapshot; 2/14 and 2/13 both ~50g short). 
+
+**Pattern:** He can articulate what he ate and sees the shortfall when you tally it, but doesn't proactively build an extra 40–50g into the day (a shake, cottage cheese, extra meat portion). The awareness is there; the behavior (pre-planning the gap) is not.
+
+**Intervention to test:** Instead of an evening tally + "you're short," try pre-arming him at morning briefing: "Hit 165g today — that's roughly 4 palms of protein spread across meals. Build it in at breakfast/lunch and you won't see a gap at night." Shift from *correcting* to *preventing*.
+
+**Why it matters:** In a deficit, 1.0–1.2 g/lb (~165g) is the #1 muscle-retention lever. A chronic 50g gap = 18% under target = material muscle-loss risk.
+
+## PATTERN_015 — Rapid weight drop June 2026
+**Dates:** 2026-06-02 to 2026-06-14
+**Observation:** Weight dropped from ~157.9lb to ~152.8lb (~5.1lb in ~12 days ≈ ~2.9 lb/wk). This is well above the 0.5%/wk (~0.75 lb/wk) guideline and hits the 1%/wk hard ceiling — muscle loss risk. BF% reading on 6/12 was 13.1% (snapshot) but Withings latest on 6/14 shows 7.6% — large discrepancy suggests measurement variance/device calibration issue.
+**Action:** Monitor weekly. If weight keeps dropping at this rate, flag to Matt and consider shrinking the deficit. Do NOT rely on single BF% readings — use the trend and strength-retention index (e1RM vs weight) as primary muscle-retention signal.
+
+## PATTERN_015 — Cut Rate Exceeding Target (Jun 2026)
+**Date:** 2026-06-19
+**Metric:** Weight trend (bodycomp_trend 21d)
+**Finding:** -2.38 lb/wk over 21 days — well above the 0.5 lb/wk (0.5%/wk) target ceiling of ~0.75 lb/wk. GOAL.md hard ceiling is 1%/wk (~1.5 lb/wk at ~153 lb).
+**Risk:** Cutting this fast increases muscle loss probability, especially for a low hypertrophy responder. Short-term weight is flat (152.7–153.0 last 2 weeks) suggesting the trend may be stabilizing, but worth flagging.
+**Action:** Flag to Matt; likely need to ease deficit (add ~100–200 kcal/day), keep protein at or above 165g. Monitor e1RM on key lifts as the primary muscle-retention guardrail.
+
+## pp_012 — Leg Press baseline & hamstring ROM
+First leg press session (2026-06-19): 180×10 established as baseline. Matt reported a stretch sensation on the straight leg (adductor/hamstring lengthened position at the top of the press) — normal and good, exactly where the stimulus should be. Tightness after the set is expected; resolved with light movement. This is his new floor for leg progression.
+
+## pp_018 — Matt responds to ambitious targets + tight feedback
+When Matt wants to push hard (e.g., "don't ramp up, let's go full tilt"), the right coaching move is:
+1. **Honor the intent** — lock the ambitious plan (MAV, not MEV/ramp).
+2. **Tighten the feedback loop** — shift from preset rules to "tell me when it's too much."
+3. **Keep the safety net** (calories, protein) but trust his report over WHOOP color.
+
+He dislikes overly conservative defaults during high-capacity windows. Conservative autoregulation (yellow day = cut volume) doesn't match how he wants to train. Ambitious baseline + fatigue feedback works better.
+
+## perf_026 — Incline DB Press e1RM progression
+Incline DB Press e1RM jumped from 45.5 to 66.7 (2026-06-25), a 47% jump. This is consistent double-progression in action — reps climbing week to week, then load climbing once reps hit the top of the range. Key lift baseline was 95 lbs × 11 warm-up, then 115×6/5/6 working (2026-06-09, test data). Real logged baseline (2026-06-25) shows DB work scaling cleanly. Demonstrates Matt responds well to structured rep-range progression on upper-body compounds.
+
+## perf_024 — Exertional headaches on heavy pressing
+**Pattern:** Frontal headaches emerge on final reps of heavy bench press sets (last 2–3 reps, intense onset). Happened on 2026-06-29 and the week prior. Triggered by Valsalva maneuver (breath-holding under max effort).
+
+**Root cause:** Intracranial pressure spike during grinding reps on heavy pressing when breathing is held.
+
+**Coaching response:** Stop AMRAP sets on bench; cap at 2–3 RIR (no true max-effort grinding). Enforce exhale-on-press breathing cue. Matt booked doctor's appointment to rule out structural issues before resuming heavy pushing.
+
+**Matt's instinct:** Self-regulated well — quit early rather than push through, stopping before full fatigue. Shows good safety awareness.
+
+**Training implication:** Can still train heavy chest compounds, but must manage Valsalva intensity and breathing discipline. Monitor on next chest session (2026-07-01 likely); expect full clearance post-doctor's check mid-week.
+
+## perf_025 — Incline barbell bench e1RM surge (149.5 → 160)
+**Benchmark progress (2026-06-29):** Incline barbell bench e1RM jumped from 149.5 to 160 lbs (+10.5 lbs / +7%), and incline DB press from 66.7 to 72 lbs (+5.3 lbs / +8%).
+
+**Context:** Hit despite cutting the session short due to exertional headache — not a full-effort day, yet strength still climbed. Indicates solid training adaptation and accumulation from the MAV-push block (2026-06-20 lock).
+
+**Implication:** The program is driving real progress even under constraints. Once headache is cleared, expect continued climbing trajectory on chest pressing (this is the priority weak point).
+
+## perf_019 — Back/biceps PRs on green recovery + Meso W2
+Session 2026-06-30 (Tuesday Back + Biceps, Meso W2, recovery 85%):
+- **6 e1RM PRs:** Lat Pulldown +6.8, Seated Cable Row +9, DB Row +3.5, Face Pull +2.9, DB Curl +4.3, Hammer Curl +0.9
+- **Context:** Green recovery (85%), HRV 79, 8.3h sleep. Meso W2 (2 RIR target). Split well-fed week (no major protein misses).
+
+**Pattern:** High recovery + solid sleep + mid-meso intensity is producing consistent back/biceps progression. This is a stable training window for upper-body pull work. Watch for deload need around Meso W4–W5 if the PRs keep stacking.
+
+## perf_041 — Muscle growth signal in maintenance phase
+**Date:** 2026-07-02. Matt noted he "looks better in the mirror" while weight is flat (152–156 lb noisy, trend ~maintenance). Same session: four e1RM PRs (DB Press, Arnold Press, Lateral Raise, Face Pull).
+
+**Signal:** Strength ↑ + bodyweight flat = muscle retention or slow growth + fat holding steady. This is the intended outcome during the MAV push block at near-maintenance calories. When deficit resumes post-block, he'll have more lean mass to reveal.
+
+**Coaching note:** This validated his confidence ("doing the right things"). Reassure with PRs + mirror as proof, not scale.
+
+## perf_025 — Incline Barbell Bench AMRAP RIR (2026-07-03)
+Last set of Incline Barbell Bench @ 120 lbs: 11 reps, RIR 0 (to failure). No headache reported this session — good sign. e1RM 166.2 (PR). Next session: hold 120 lbs, target 12 reps before bumping load.
+
+## pp_013 — Execution Under Low Recovery
+**2026-07-03 (Week 2 of push block):** Matt hit MAV on all 6 muscle groups (chest 17, triceps 10, back 15, biceps 6–9, shoulders 11–12, legs 10) with recovery yellow/red every day Wed–Fri, and set 5 PRs (Incline Barbell Bench e1RM 166.2, Cable Fly e1RM 21.6, DB Row 35 lbs, Face Pull 30 lbs, Leg Press 190 lbs). Executed to failure (0 RIR) on incline bench last set. No headaches despite previous sessions having them.
+
+**Pattern:** Matt doesn't need green recovery to hit hard targets — he executes on the plan regardless of WHOOP color. The autoregulation rule (performance-primary, recovery-modifier) is working: he's not cutting volume on yellow/red, and the output is strong. Feedback-loop override (job-transition window) is proving robust.
+
+**Implication:** Trust his reported fatigue, not WHOOP alone. If he says "too much," pull back; otherwise, the split and volume are sustainable even on low-recovery weeks.
+
+## pp_014 — Headache Pattern (Incline Bench Sessions)
+**Context:** Matt reported no headache on 2026-07-03 incline bench, unlike the previous two sessions. He also mentioned exhale-on-press discipline as the fix (Valsalva management). This is his second session without the headache after the correction.
+
+**Tracking:** Monitor incline bench sessions going forward — if the headache returns, flag it immediately. If it stays gone, the exhale cue is the lever. This is relevant to load progression on incline barbell (can't push hard if Valsalva is spiking ICP).
+
+## perf_032 — Chest fatigue / strength drop W4 (2026-07-09)
+**Date:** 2026-07-09 (Thursday, W4 of meso)
+**Observation:** Matt reported no strength on chest — completed only 7 of planned sets (incline bench + incline DB press) and cut the session short. Attributed to built-up fatigue.
+**Context:** W4 of push block (highest accumulated fatigue point), compounded by inconsistent sleep earlier in the week. Normal W4 pattern — not a red flag.
+**Action:** Let chest rest Friday; shoulders/biceps session instead. Reset to W1 next Monday — expect strength to bounce back on incline bench.
+**Note:** Also flagged that morning hydration protocol (32 oz water before getting up, started ~early July after blood work) is adding ~1.5–2 lbs of consistent scale weight — not fat. Factor this into Withings trend interpretation going forward.
+
+## perf_024 — Late-night snacking driven by sleep debt
+Matt's snacking urge is primarily a late-night/fatigue signal, not hunger. Solution is bed by 9 PM + protein-first snack (cottage cheese, yogurt, turkey) if hunger genuinely hits. Early sleep short-circuits the behavior entirely. This is a sleep-as-lever pattern, not a willpower issue.
+
+## PP_015 — Evening snack leak (Friday pattern)
+Matt identified a Friday-night snack pattern that leaks ~100–150 kcal post-dinner. Intervention that worked before: cottage cheese or Greek yogurt after dinner + teeth brushed + in bed by 9 PM. This closes the snack window and banks sleep. Reinforce this tactic when deficit plateaus (e.g., 2026-07-19 weight flat at +0.1 lb/wk despite 12.6% BF goal).
+
+## perf_087 — Matt reads fatigue signals clearly
+Matt self-identifies rep-drop fatigue (e.g., "Biceps were not there. You can see the fatigue in completed reps") and proactively asks for programming to match (hold load, let volume recover). He doesn't need daily WHOOP cues — give him a clear readiness standard upfront (last-set RIR, rep-range thresholds) and he owns the decision. This is a coaching asset: lead with the framework, trust his feedback loop.

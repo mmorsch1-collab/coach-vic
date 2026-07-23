@@ -6,6 +6,9 @@
 - Peloton bike
 - Resistance bands
 
+## Core Programming Note
+No daily plank routine — core is programmed deliberately on appropriate days (see WORKOUT_PROTOCOL.md).
+
 ## When to Use
 - Missed 5:30 AM gym session
 - Green or yellow recovery day where some movement is better than none

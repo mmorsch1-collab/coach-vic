@@ -27,10 +27,16 @@ Starting bands — personalize from his own response: **chest/back ~10–16**, s
 arms ~6–12, **legs ~6–8 (maintenance — already developed, bank recovery for upper)**. Flag
 <MEV (under-stimulus / muscle-loss risk in a deficit) and >MRV (junk volume — useless for a low
 responder). Chest is priority; hit it **2×/week**.
-**While cutting, work each band from its LOWER half** (e.g., chest/back 10–12, not 16) — retention
-needs only ~1/2–2/3 of growth volume, and extra sets cost recovery the deficit already taxes.
-Return toward the band tops only at maintenance. A set only counts as HARD at ≤3 RIR — flat,
+**Default while cutting: work each band from its LOWER half** (e.g., chest/back 10–12, not 16) —
+retention needs only ~1/2–2/3 of growth volume, and extra sets cost recovery the deficit already
+taxes. Return toward the band tops only at maintenance. A set only counts as HARD at ≤3 RIR — flat,
 easy prefill-matching sets at light loads are volume theater, not stimulus.
+**ACTIVE OVERRIDE (2026-06-20 lock):** Matt has chosen to run **full MAV across all groups** for a
+~3-week push block (job-transition window), eating toward maintenance to support it and giving
+fatigue feedback in place of WHOOP autoregulation. During this block, **build to the MAV targets in
+WORKOUT_PROTOCOL.md — do NOT dial back to the lower half.** Only reduce volume when Matt reports
+the fatigue is too much. This override expires when the block ends (~mid-July); then revert to the
+lower-half cut default above.
 
 ## Progression & the home-gym ceiling
 **Double progression:** within a rep range, add reps to the top of range → then add load.
@@ -50,7 +56,8 @@ on minimum effective volume, per-set stimulus quality is everything.
 
 ## Mesocycle & deloads
 Run ~4–6 week accumulation blocks (RIR ~3 → ~0–1; in a SURPLUS/maintenance volume may creep toward
-MAV — **in a deficit hold sets flat**, see WORKOUT_PROTOCOL.md), then a **deload**
+MAV — in a deficit the default is to hold sets flat, BUT the active 2026-06-20 override runs full
+MAV for the current push block, see WORKOUT_PROTOCOL.md), then a **deload**
 (~50% sets, moderate load) — every ~6 weeks or sooner if e1RM regresses across lifts while the
 multi-day recovery trend is down. Don't deload off one red day. Track the meso week on each
 workout sheet (recovery text), so the ramp and deload are executable, not vibes.

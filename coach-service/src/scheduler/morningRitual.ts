@@ -35,8 +35,12 @@ export async function runMorningRitual(opts: { force?: boolean } = {}): Promise<
     return { sent: false, reason: a.reason ?? 'bridge unavailable' };
   }
 
-  const workoutStart = localDateTime(date, '05:30');
-  const workoutEnd = localDateTime(date, '06:30');
+  // Workout block from config (WORKOUT_TIME), 60 min long. Moving WORKOUT_TIME
+  // shifts both this calendar block and the morning cron schedule together.
+  const [wh, wm] = config.workoutTime.split(':').map(Number);
+  const endHH = String((wh + 1) % 24).padStart(2, '0');
+  const workoutStart = localDateTime(date, config.workoutTime);
+  const workoutEnd = localDateTime(date, `${endHH}:${String(wm).padStart(2, '0')}`);
 
   const whoopLine = whoopFresh
     ? `recovery=${a.recovery}% (${a.color}), strain=${a.strain}, sleep=${a.data?.sleep?.durationHours ?? '?'}h` +
@@ -48,7 +52,7 @@ export async function runMorningRitual(opts: { force?: boolean } = {}): Promise<
       `WHOOP hadn't scored yet.`;
 
   const instruction = [
-    `It is the weekday 5:15 AM morning ritual for ${date}. Produce Matt's morning briefing.`,
+    `It is the weekday morning ritual for ${date} (workout planned for ${config.workoutTime}). Produce Matt's morning briefing.`,
     ``,
     `Today's WHOOP (already fetched — do NOT call get_whoop_today): ${whoopLine}`,
     ``,

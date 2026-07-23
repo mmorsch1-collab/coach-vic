@@ -45,7 +45,11 @@ export async function handleUserMessage(input: string | InboundMessage): Promise
     // Chat runs on the heavy tier (Sonnet): better instruction-following and
     // faithfulness to the snapshot/corrections than Haiku — accuracy > cost here.
     tier: 'heavy',
-    maxTokens: 1200,
+    // Headroom for build-heavy turns (e.g. "create all 5 sheets + calendar events"):
+    // 1200 truncated mid-tool-emission, so the tool calls never fired. 4096 leaves
+    // room for the preamble + the batch of tool_use blocks. You only pay for output
+    // actually generated, so ordinary short replies are unaffected.
+    maxTokens: 4096,
     maxIterations: 8,
   });
 

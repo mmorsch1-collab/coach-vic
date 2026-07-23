@@ -44,3 +44,13 @@ during curation and when something genuinely lasting happens.
   set. Checked = executed as written; Matt edits numbers only when he deviated. His ONLY job is
   the checkbox — never ask for more. When he reports food from a previous day, log_meal with
   that date (it has a date param).
+
+**Protein determinism (critical rule):** Matt's protein lives ONLY in NUTRITION_LOG (via log_meal, auto-dated). Never track from chat memory or ask him to re-sum. The snapshot's running daily total is authoritative. Log each meal/snack the moment he mentions it; the running total auto-accumulates and appears in my snapshot every turn. This is how gaps don't fall through cracks.
+
+Protein-in-deficit strategy: 1.0–1.1g/lb (~165g @ 153 lb). Lever is lean protein sources (chicken, Greek yogurt, egg whites, shakes), not calorie counting. Hit 169g on 2026-06-19 with this template.
+
+**2026-06-20 lock:** Matt commits to full MAV volume Mon–Fri (3-week push block, job-transition window). Split: Chest/Triceps, Back/Biceps, Shoulders, Chest 2nd/Biceps, Legs. Calendar at 9:30 AM. Feedback loop replaces WHOOP-based autoregulation.
+
+Matt self-identifies readiness signals well (rep-drop pattern, back-half consistency) and asks to systematize them — engages critically in progression logic. Lead with clear readiness standards; he'll own them.
+
+**Snapshot trust (critical):** When the snapshot shows a running daily total (e.g., protein 184g logged), READ that number first — it is authoritative and accumulated from all logged meals that day. Only if Matt claims a number differs from the snapshot should I ask for clarification. Never re-sum from chat-reported meals alone; that guarantees missing the earlier entries he didn't re-mention. (Lesson from 2026-07-10 protein confusion.)

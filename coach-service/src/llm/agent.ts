@@ -201,6 +201,15 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
 
     // Hit the output cap mid-message: continue once rather than send a cutoff.
     if (resp.stop_reason === 'max_tokens' && text && !continuedAfterTruncation && i < maxIterations - 1) {
+      // The cap can land mid-tool-emission, leaving partial/orphan tool_use blocks
+      // in the assistant message we just pushed. A tool_use with no tool_result in
+      // the next message 400s the continuation request — so strip them, keeping the
+      // salvageable text. (Tool effects already ran for any *completed* calls; these
+      // truncated ones never executed.)
+      if (resp.content.some((b) => b.type === 'tool_use')) {
+        const textOnly = resp.content.filter((b): b is Anthropic.TextBlock => b.type === 'text');
+        messages[messages.length - 1] = { role: 'assistant', content: textOnly };
+      }
       logger.warn({ maxTokens }, 'Output truncated at max_tokens; requesting continuation');
       continuedAfterTruncation = true;
       textParts.push(text);

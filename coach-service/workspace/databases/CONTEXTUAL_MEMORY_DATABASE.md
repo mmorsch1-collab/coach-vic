@@ -184,3 +184,186 @@
 - Friday hockey: Skip gym on game nights; load volume Mon–Thu instead
 
 **Action:** Confirm job transition timeline and exact start date so we can lock the training calendar and optimize the cut window.
+
+## ctx_024 — Back spasm protocol from PT/specialist
+Matt's friends recommended a PT-vetted back protocol (2026-06-16). Key elements:
+- **Full-body options (2×/wk):** DB cossack squats, cable rotations to punch, heavy KB Pallof-style, BB deadlifts (all light-moderate load, mobility-first)
+- **Upper body solo:** eccentric DB chest press (3s down), DB incline bench row, tall kneeling hip ext→OH press, DB incline curls, DB tricep kickbacks
+- **Lower body alt:** BB front squat or goblet squat, single-arm farmers carry, DB curtsy lunges, half-kneeling cable rotations
+- **Movement snacks:** SL bounds, SL hip airplanes, split squat calf raise, chin retraction progressions, quadruped hip CARs, plank rocks, prone press-ups, median nerve sliders, half-kneeling TSP rotations, reverse lunges to high knee, DB hip airplanes, half-kneeling windmills
+- **Tylenol moves:** prone press-ups, chin retractions, median nerve sliders
+- **Integration:** Replace plank circuits with chin retractions → prone press-ups → quad CARs → half-kneeling TSP rotations → plank rocks. Eccentric focus (3s down) on pressing. Light rotational core (cables, cable punches) and hip mobility work instead of heavy spinal loading.
+
+Confirmed effective 2026-06-16: back felt good after barbell flat bench + warm-up sequence. No bending for DBs, conservative loads on hinges, mobility-first approach.
+
+## ctx_031 — 3-week focused training block starts 2026-06-19
+Matt has 3 weeks off (job transition window) starting ~June 18. Working out at 9 AM instead of 5:30 AM for extra sleep. Full focus on recomposition goal.
+
+**Locked split:**
+- Monday: Chest + Biceps
+- Tuesday: Back
+- Wednesday: Shoulders
+- Thursday: Arms (Triceps + Biceps) + Chest 2nd hit (3–4 sets)
+- Friday: Legs
+
+Week 1: Rebuild consistency, integrate back protocol, nail protein daily (3 RIR)
+Week 2: Ramp volume on lagging muscles (chest, back, biceps)
+Week 3: Push intensity, PRs on key lifts
+
+**Snack swap:** Moving away from meat sticks/cheese/peanut butter (calorie-dense fat) toward cottage cheese, hard boiled eggs, deli turkey, Greek yogurt. Double protein shake — morning two scoops + afternoon shake.
+
+**Back:** Fully recovered as of 2026-06-18. Back protocol exercises (Cossack squat, KB arm bar, cable rotations, SA farmers carry) integrated into warm-ups and leg days.
+
+## ctx_024 — Job transition: 3-week high-consistency window
+Matt is between jobs for ~3 weeks (starting 2026-06-18) and can now train at 9:30 AM instead of 5:30 AM, gaining extra sleep — his #1 recovery lever. Schedule is fully flexible for Mon–Fri lifting.
+
+**Opportunity:** This is the optimal window for the recomposition cut (10% BF goal). With better sleep and full focus, volume, intensity, and consistency can ramp safely.
+
+**Plan locked (2026-06-18):**
+- 5×/week lifting: Mon Chest, Tue Back, Wed Shoulders, Thu Chest+Arms, Fri Legs (or permutation — confirm if hockey plays Friday nights).
+- Baseline Friday 2026-06-19: Leg Press (no prior history; Matt establishes the number).
+- 9:30 AM calendar blocks starting Monday 2026-06-20.
+- **Week 1:** rebuild consistency + nail 165g protein daily.
+- **Week 2:** ramp volume (chest, back, biceps still lagging).
+- **Week 3:** push intensity, chase PRs.
+
+Target: visible leanness at ~10% BF by ~June 30.
+
+## ctx_020 — Volume tracking accuracy (read sheets, not memory)
+On 2026-06-19, Matt called out a discrepancy in my volume summary (said 5 sessions, actually 4 — Monday 6/15 was skipped). He's paying close attention to the data. Always verify against the actual sheets (get_workout, get_muscle_volume) before summarizing a week. Memory of a conversation is not authoritative; the sheets are.
+
+## ctx_024 — 3-week MAV push block (2026-06-20 lock)
+Matt committed to full MAV volume for 3 weeks (job-transition window, high capacity). Split locked:
+- Mon: Chest 10 + Triceps 10
+- Tue: Back 14 + Biceps 6
+- Wed: Shoulders 12
+- Thu: Chest 6 + Biceps 6
+- Fri: Legs 10
+
+Weekly totals: Chest 16, Back 14, Shoulders 12, Biceps 12, Triceps 10, Legs 10 (all MAV).
+
+Expert review (Israetel + Nippard) approved. Calendar events moved to 9:30 AM (from 5:30 AM gym). Workouts built in sheets week of 2026-06-21.
+
+Matt's feedback loop is the volume dial — dial back only when he reports fatigue, not WHOOP color alone. Calories must follow the volume (close to maintenance or slight surplus).
+
+## ctx_labs_testosterone — June 2026 hormone panel
+## Testosterone Trend (flagged — declining)
+- **March 2025:** Total T 419 ng/dL, Free T 12.82 ng/dL, Free T% 3.06%
+- **June 2026:** Total T 347 ng/dL, Free T 7.01 ng/dL, Free T% 2.02%
+- Total T dropped 17%, Free T dropped 45% in 15 months
+- Likely mechanism: rising SHBG binding more available T
+- Next steps: get SHBG, LH, FSH, Estradiol (E2), Vitamin D on next panel
+- Treatment to discuss: Enclomiphene (stimulates LH/FSH upstream)
+- Endocrinology referral recommended
+
+## Other Lab Highlights (June 2026)
+- LDL 77 — optimal (statin working)
+- HbA1c 5.4% — excellent
+- BUN 28 / BUN:Creatinine 24 — both flagged High (likely high protein intake + mild dehydration)
+- HDL 47 — low-normal (monitor)
+- CBC: all clean, no flags
+- Glucose 79 — optimal
+
+## ctx_025 — Hamstring tingle / sciatic nerve sensitivity
+Reported 2026-06-25: during left hamstring stretches, Matt feels a tingle running down the leg. Has been present "for a while" and may be related to occasional lower-back pain (though back felt great in week of 2026-06-25). Likely sciatic nerve being pulled taut during stretch, not a muscle issue. Coaching notes: (1) Don't force the stretch into the tingle — may aggravate the nerve. (2) Sciatic nerve flossing is gentler than static stretching. (3) Plank routine (core stability) genuinely helps by reducing nerve root compression. (4) Matt should mention to doctor/PT at next visit — not urgent but proactive is better than reactive. Continue planks; monitor for progression toward pain rather than just tingle.
+
+## ctx_020 — Lower Back Protocol (PT-Vetted, Pre-Lift Warm-Up)
+**Date:** 2026-06-26
+
+Matt has sciatic nerve sensitivity and lower-back history. Before heavy leg day, he asked for a lower-back protection warm-up.
+
+**Protocol (PT-vetted, used successfully 2026-06-26):**
+1. Chin retractions — 10 reps
+2. Prone press-ups — 8–10 slow reps (his "Tylenol move")
+3. Quadruped hip CARs — 5 circles/side
+4. Half-kneeling TSP rotations — 6/side
+5. Plank rocks — 10 reps
+6. Then standard 6-min plank routine
+
+**Execution notes:**
+- Do this BEFORE any loading.
+- Start lighter than feels necessary (50–60% for first 2–3 sets on heavy compounds).
+- RDL/hinge pattern preferred over conventional deadlift (less spinal shear, more glute/hamstring).
+- **Stop immediately if nerve tingle occurs** — that's the signal, not soreness.
+- Hamstring static stretch pre-lift = skip (nerve already sensitized; stretching it pre-load risks aggravation).
+- Warmth post-set = good (blood flow); tingle/shooting = stop.
+
+**2026-06-26 execution:** RDL at 45 lbs × 3 × 10, limited ROM, zero nerve tingle. Back felt fine. ROM will improve gradually as pattern solidifies.
+
+**For future:** Use this protocol before any lower-body heavy session or if Matt flags back concern. It works.
+
+## ctx_031 — Exertional headaches during heavy bench pressing
+**First reported:** 2026-06-29 (but also occurred previous week — pattern over 2 sessions)
+**Symptom:** Intense frontal headache onset during the last couple reps of heavy incline barbell bench press. Came on before being fully gassed — lower threshold than expected.
+**Pattern:** Happens on max-effort/grinding reps; easing off intensity reduced the pain.
+**Assessment:** Likely primary exertional headache (Valsalva-driven intracranial pressure spike). Not thunderclap onset, but intense and recurring — warrants medical clearance before pushing heavy again.
+**Action taken:** Matt quit session early (correct call). Advised to see doctor this week before next chest session.
+**Coaching rule:** Until medical clearance received, NO AMRAP sets or max-effort grinding on bench press. Keep RIR ≥ 2–3 on all pressing. Thursday chest session should be light/technique-focused. Breathing cue: exhale on the press, never hold breath through hard reps.
+
+## ctx_025 — Friday split addition: Legs 10 + Biceps 6
+Locked on 2026-06-30: Friday session now includes **Biceps 6** in addition to Legs 10 (Matt corrected the split assumption). This ensures the weekly biceps total hits MAV (6 Tue + 6 Fri = 12 sets). 
+
+Updated weekly split (Mon–Fri):
+- Mon: Chest 10 + Triceps 10
+- Tue: Back 14 + Biceps 6
+- Wed: Shoulders 12
+- Thu: Chest 6 + Triceps 10 (makeup/flex day)
+- Fri: Legs 10 + Biceps 6 (updated — biceps added)
+
+When building future workouts, use this Friday template, not the old Legs-only default.
+
+## ctx_026 — Metabolic/Hormone Panel Results (2026-07-09)
+Lab results received 2026-07-09 (Labcorp, Final Report):
+
+**Testosterone:**
+- Free Testosterone: 13.21 ng/dL (ref: 5.00–21.00) ✅ Normal
+- % Free Testosterone: 2.78% (ref: 1.50–4.20) ✅ Normal
+
+**Kidney Function:**
+- Cystatin C: 0.71 mg/L (ref: 0.60–1.00) ✅ Normal
+- eGFR Creat-Cyst C: 113 mL/min/1.73 (ref: >59) ✅ Excellent
+
+**Hormones:**
+- LH: 7.7 mIU/mL (ref: 1.7–8.6) ✅ Normal (high-normal)
+- FSH: 5.1 mIU/mL (ref: 1.5–12.4) ✅ Normal
+- Estradiol: 18.1 pg/mL (ref: 7.6–42.6) ✅ Normal
+- Sex Hormone Binding Globulin (SHBG): 40.2 nmol/L (ref: 16.5–55.9) ✅ Normal
+
+**Context:** Reference range is healthy nonobese males (BMI <30), ages 19–39.
+
+**Coaching notes:**
+- Free T is solid mid-range — supports recovery and muscle retention in the cut. No concern.
+- SHBG is on the higher side of normal (40.2/55.9) — means a bit more T is bound, but free T is still healthy. Worth monitoring if fatigue or recovery becomes an issue.
+- Estradiol is low-normal (18.1) — appropriate for his body composition/cut phase.
+- Kidney function excellent — creatine supplementation safe to continue.
+- No hormonal red flags. Good baseline for the recomp push.
+
+## ctx_027 — Basic Metabolic Panel + Total T (2026-07-09, Page 1)
+Lab results page 1, collected 2026-07-06, reported 2026-07-09 (Labcorp, Final):
+
+**Basic Metabolic Panel (8):**
+- Glucose: 99 mg/dL (ref: 70–99) ✅ High-normal (fasting)
+- BUN: 16 mg/dL (ref: 6–20) ✅ Normal
+- Creatinine: 1.01 mg/dL (ref: 0.76–1.27) ✅ Normal
+- eGFR: 97 mL/min/1.73 (ref: >59) ✅ Normal
+- BUN/Creatinine Ratio: 16 (ref: 9–20) ✅ Normal
+- Sodium: 138 mmol/L (ref: 134–144) ✅ Normal
+- Potassium: 4.5 mmol/L (ref: 3.5–5.2) ✅ Normal
+- Chloride: 98 mmol/L (ref: 96–106) ✅ Normal
+- Carbon Dioxide, Total: 27 mmol/L (ref: 20–29) ✅ Normal
+- Calcium: 9.7 mg/dL (ref: 8.7–10.2) ✅ Normal
+
+**Testosterone (Total):**
+- Total Testosterone: 475 ng/dL (ref: 264–916) ✅ Normal (mid-range)
+
+**Coaching notes:**
+- Glucose at 99 (fasting) = high-normal. Not alarming, but worth watching — anything consistently at/above 100 fasting = pre-diabetes territory. Keep an eye on this over time; current diet/exercise habits are protective.
+- Total T at 475 ng/dL is solid mid-range. Combined with free T 13.21 ng/dL and SHBG 40.2, the hormonal picture is healthy. No intervention needed.
+- Full metabolic panel completely clean — kidneys, electrolytes, all normal. Creatine supplementation confirmed safe.
+- Overall: excellent bloodwork for a 39-year-old in a cut phase. No red flags anywhere.
+
+## ctx_024 — Job transition: first week, nutrition reconnaissance phase
+Matt started a new job (week of 2026-07-15). First week is reconnaissance — no typical routine yet. Nutrition risk: defaulting to convenient office defaults rather than planned meals. Strategy: lead with protein anchor, notice what's available near office over the next 1–2 weeks, then lock in a stable routine. Sleep debt + back tightness on 2026-07-15 led to an unplanned gym rest (deload week inadvertently). He's responsive to sleep/body-signal coaching and engaged in the volume/MEV/MAV framework.
+
+## ctx_020 — Job transition week 1 (2026-07-13 to 2026-07-19)
+First week at new job brought sleep debt and back tightness; Matt throttled volume (3 sessions vs planned 5). This is the new-job friction period. Expected to normalize by week 2. Volume reset needed: chest + triceps are under MEV. Body comp flat (+0.1 lb/wk) — deficit not yet dialed in. Evening snack close (cottage cheese + bed by 9) is the immediate lever.

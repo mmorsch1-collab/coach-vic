@@ -20,7 +20,21 @@ const schema = z.object({
   bridgeUrl: z.string().url().default('http://127.0.0.1:3000'),
 
   tz: z.string().default('America/New_York'),
+  // Daily workout start time (HH:MM, local). Drives the morning ritual's calendar
+  // block AND the morning cron schedule (briefing/fallback/missed-workout shift
+  // with it). Change here to move the whole workout rhythm — e.g. 05:30 vs 09:30.
+  workoutTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'WORKOUT_TIME must be HH:MM (24h)')
+    .default('05:30'),
   proactiveEnabled: z
+    .string()
+    .default('true')
+    .transform((v) => v !== 'false' && v !== '0'),
+  // Master switch for the M–F morning ritual (builds/rebuilds the day's sheet +
+  // calendar block + briefing) and its coupled missed-workout check. Set false to
+  // stop it clobbering manually-built sheets or an in-progress workout.
+  morningRitualEnabled: z
     .string()
     .default('true')
     .transform((v) => v !== 'false' && v !== '0'),
@@ -46,7 +60,9 @@ function load() {
       telegramChatId: process.env.TELEGRAM_CHAT_ID,
       bridgeUrl: process.env.BRIDGE_URL,
       tz: process.env.TZ,
+      workoutTime: process.env.WORKOUT_TIME,
       proactiveEnabled: process.env.PROACTIVE_ENABLED,
+      morningRitualEnabled: process.env.MORNING_RITUAL_ENABLED,
       quietHoursStart: process.env.QUIET_HOURS_START,
       quietHoursEnd: process.env.QUIET_HOURS_END,
       maxProactivePerDay: process.env.MAX_PROACTIVE_PER_DAY,

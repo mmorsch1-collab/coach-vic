@@ -151,12 +151,28 @@ export function registerJobs(deps: JobDeps): ScheduledTask[] {
     }
   };
 
-  // M–F 5:15 AM — morning ritual (headline).
-  tasks.push(cron.schedule('15 5 * * 1-5', guard('morning-5:15', () => morningRitualJob(deps)), tzOpt));
-  // M–F 7:00 AM — fallback if 5:15 found stale data.
-  tasks.push(cron.schedule('0 7 * * 1-5', guard('morning-fallback-7:00', () => morningRitualJob(deps, true)), tzOpt));
-  // M–F 8:15 AM — missed-workout check (sheet built but untouched; reads the sheet first).
-  tasks.push(cron.schedule('15 8 * * 1-5', guard('missed-workout-8:15', () => checkinJob('missed-workout', runMissedWorkoutCheck, deps)), tzOpt));
+  // The morning rhythm is anchored to the workout time (config.workoutTime) so it
+  // moves as one when WORKOUT_TIME changes. At the 05:30 default these resolve to
+  // the original 5:15 / 7:00 / 8:15; at 09:30 they become 9:15 / 11:00 / 12:15.
+  //   briefing      = workout hour, :15  (≈15 min before)
+  //   fallback      = workout hour +2, :00 (stale-data retry)
+  //   missed-check  = workout hour +3, :15 (sheet built but untouched)
+  const wh = Number(config.workoutTime.split(':')[0]);
+  const briefingCron = `15 ${wh} * * 1-5`;
+  const fallbackCron = `0 ${(wh + 2) % 24} * * 1-5`;
+  const missedCron = `15 ${(wh + 3) % 24} * * 1-5`;
+  // The morning ritual REBUILDS the day's sheet (clears + rewrites), which can wipe
+  // an in-progress workout, so it's behind a master switch (MORNING_RITUAL_ENABLED).
+  if (config.morningRitualEnabled) {
+    // M–F — morning ritual (headline).
+    tasks.push(cron.schedule(briefingCron, guard('morning-briefing', () => morningRitualJob(deps)), tzOpt));
+    // M–F — fallback if the first run found stale data.
+    tasks.push(cron.schedule(fallbackCron, guard('morning-fallback', () => morningRitualJob(deps, true)), tzOpt));
+    // M–F — missed-workout check (sheet built but untouched; reads the sheet first).
+    tasks.push(cron.schedule(missedCron, guard('missed-workout', () => checkinJob('missed-workout', runMissedWorkoutCheck, deps)), tzOpt));
+  } else {
+    logger.warn('Morning ritual DISABLED (MORNING_RITUAL_ENABLED=false) — no auto sheet/calendar builds');
+  }
   // M–F 10:30 AM — mid-morning.
   tasks.push(cron.schedule('30 10 * * 1-5', guard('mid-morning-10:30', () => checkinJob('mid-morning', runMidMorningCheck, deps)), tzOpt));
   // M–F 3:30 PM — afternoon.

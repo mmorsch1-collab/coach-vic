@@ -159,3 +159,108 @@ Matt asked about protein mid-day (10:59 AM), got a concrete gap (55g remaining),
 - Matt self-reported meals without being prompted beyond the initial "what's on the menu?" 
 
 This is the casual-but-accountable model that fits his style. Keep leveraging the running daily total from the snapshot; it motivates without nagging.
+
+## ci_024 — Rest days on poor readiness signals beat forced sessions
+When Matt reported "wiped" after drinks the night before + requested a rest day, coaching him to REST (despite shoulders/triceps being at 0 sets for the week) was the right call. A tired, dehydrated baseline-lift session would have eroded both progress (poor anchors) and trust. Social recovery matters. The lifts waited 113 days; they wait one more. Lesson: **listen to Matt's body signal first; the program is flexible.**
+
+## ci_024 — Back spasm recovery protocol (heat→stretch→gentle movement)
+When Matt experiences lower-back spasm (2026-06-14 incident):
+
+**Order of operations:**
+1. Heat (10 min) to loosen tissue before stretching
+2. Gentle stretches: knee-to-chest, cat-cow, child's pose (avoid forward folds standing)
+3. Gentle planks (30–45 sec) once spasm has settled — core activation stabilizes the spine
+
+**Safety rule:** if it hurts, stop. If neutral/relieving, continue.
+
+**Why it works:** Core activation (planks) + lateral stabilizers (side planks) offload the spasmed muscles. This is also why his 6-min plank routine is non-negotiable for long-term lower-back resilience.
+
+**Pattern:** spasm typically signals a weak core or posture issue under load. After recovery, recheck his plank consistency and form.
+
+## ci_024 — Protein automation works; pre-workout unnecessary with better sleep
+**Protein doubling (2026-06-18):** Matt was averaging 152g/day, hitting 165g target only 1/7 days. Suggested pre-building via 40g breakfast + 40g lunch + 40g dinner + 40g shake. Matt's response: "I'll double up my protein powder in the morning. Maybe hit a protein shake in the afternoon." This is solid self-direction — the structure (scoops + shakes at fixed times) removes the gap-chasing game.
+
+**Pre-workout:** Matt asked about pre-workout to "jump start fitness" during the 3-week high-consistency window. Assessment: with 9:30 AM training (vs 5:30), better sleep, and already-stable creatine, pre-workout is not needed. Recommendation: black coffee 30 min pre-workout is enough; reserve pre-workout for genuine motivation dips (loses edge if daily). Confirmed Matt understood — no pushback.
+
+## ci_024 — Protein strategy in deficit (lean sources, no counting)
+Matt grasps the protein-retention mechanic now: 1.0–1.1g/lb bodyweight (~165g at 153 lb) is the muscle-preservation lever in a deficit. The actionable insight he landed on is **lean proteins over fat-heavy ones** — chicken, Greek yogurt, egg whites, shakes — which naturally keeps him in a calorie deficit without explicit counting. Template: double shake breakfast, protein anchor every meal. Hit 169g on 2026-06-19 by following exactly this. This removes the friction of "hard to cut calories AND hit protein" — it's just source selection, not math.
+
+## ci_025 — Cardio in deficit (not a lever, fine-tuning only)
+Matt asked if he should add runs during the cut. The answer: no. In a mild deficit, food (esp. hitting protein) drives the deficit; cardio is just a fine-tuning dial. Adding runs increases recovery demand on the system already taxed by lifting — for a low responder, that cost comes out of muscle retention, not fat loss. Strategy: daily steps (8–10k) + optional Zone-2 Peloton (20–30 min) on weekends. Hard intervals belong at maintenance, not in deficit. This positioning keeps Matt focused on the real levers: protein + heavy lifting + deficit via food choice.
+
+## ci_024 — Data freshness and target prefilling
+**Insight:** Matt asked why the sheet had blank target weights. Root cause: **exercises with no logged history can't be prefilled — a guessed weight is worse than blank.** New exercises (Cable Fly, Overhead Tricep Extension, Incline DB Press at gym) or exercises last done at home weights show blank until they're logged in the database.
+
+**Lesson:** This is correct behavior. Prefilled targets must come from `get_exercise_progression` (real logged data), never fabricated. After Matt completes a session and I ingest it, the next sheet will have real prefilled targets for all lifts — that's the flywheel working.
+
+**Action:** Keep the discipline: no guessed weights, ever. Ground every target in logged history or leave it blank and ask Matt to establish a baseline.
+
+## ci_024 — Body Recomposition Visuals Before Numbers
+**Date:** 2026-06-26
+
+Matt asked if it's possible to look better without body comp changing — he's seeing mirror gains but Withings is stubborn. 
+
+**Insight:** Yes, it's real and not mental. Body recomposition is non-linear: losing fat + gaining muscle simultaneously can show dramatic visual change (muscle fullness, posture, carry) while the scale barely moves and BF% stays noisy day-to-day. The mirror is a legitimate, often-leading signal — especially during high-consistency phases (6 sessions in 7 days, record recovery scores).
+
+**What worked:** validating the mirror signal + connecting it to muscle fullness and trained-muscle visuals + tying it back to his actual protein execution (180g/day average protecting muscle through the deficit). This gave him confidence in the process when the scale wasn't moving linearly.
+
+**For future:** when BF% is sticky but mirror/strength/recovery are all positive, lead with "you're doing the right things" and reassure that the numbers will follow.
+
+## ci_024 — Matt reading his own body-comp responses
+2026-06-28: Matt noticed the scale bump after a refeed (Chinese food surplus night) and correctly interpreted it as "some fat gain but also muscle gain" — distinguishing water/glycogen weight from actual body composition. This is a high-maturity signal. Low hypertrophy responders especially benefit from periodic refeeds (hormonal environment, glycogen restoration, muscle fullness), and Matt is now consciously reading those signals. Reinforce this awareness when he notices it; it's a lever for the recomposition goal.
+
+## ci_024 — Weekly volume window clarity
+Matt caught me pulling in stale 7-day rolling-window data when planning weekly makeup work on 2026-06-30. The issue: I was counting biceps/triceps from last week into "this week's" total, which looked like he was already at MAV when he actually had zero sets done yet.
+
+**Fix:** When planning makeup work mid-week, explicitly scope to calendar week (Mon–Sun) or the current training cycle, NOT a rolling 7-day window. State the scope clearly in the message so Matt can verify I'm reading the right data. This prevents false "you're already at MAV" claims that break trust.
+
+Also: always ask Matt to confirm the week's starting point when volume carryover is ambiguous — he knows his own training intent better than a automated window.
+
+## CI_024 — Matt catches planning logic gaps; be explicit about exercise placement
+2026-07-01: Matt flagged that face pulls appeared on both chest (Monday) and back (Tuesday) days, and questioned whether the plan-building logic checks history across the week. He's right — when placing accessory movements, I should pull `get_muscle_volume` + recent session history BEFORE adding them, not just ground key compounds in progression data. He's detail-oriented and pays attention to the split structure; lean into this by being explicit about *why* each exercise lands on its day and what the weekly placement looks like.
+
+## ci_024 — Red-day PRs validate pushing through low recovery
+**Date:** 2026-07-02. Matt completed Leg Day on 34% recovery (red). Instructions: "hold loads, stay 2 RIR." Result: three e1RM PRs (Leg Press 263, RDL 87, Outer Thigh 225).
+
+**Insight:** When the plan calls for a session despite low recovery, and the athlete executes it, the PRs prove the call was right. Autoregulation via volume/load held + RIR target (not near-failure) allows quality work even on red days. Don't over-rest; dial intensity, keep sets. Feedback loop > WHOOP color.
+
+## ci_024 — Weekly Review Structure (Matt Preference)
+When Matt finishes a week and asks "Give me my week in review. Compare to last week. Look at all sets and reps and exercises," he wants a **detailed week-over-week table per muscle group** (last week vs this week, same exercises, reps/load comparison) plus a summary of PRs and volume landmarks (MAV hit/miss). He also wants to know the standout lifts and patterns.
+
+Deliver this as a **clean markdown table per muscle**, exercise-by-exercise, with highlights on improvements (load bumps, rep PRs). Omit internal reasoning; just the facts and the verdict. This is how he integrates his progress and plans the next week.
+
+## ci_024 — Back-half consistency as progression readiness signal
+Matt demonstrates clear ownership of the back-half consistency rule: when the final set(s) of a progression target drop below the rep range (e.g., 4th set of incline barbell bench hit 8 vs the 10-rep target), hold the load rather than advancing. He self-corrected on 2026-07-06 — 120 lbs stays put on incline barbell bench until sets 2–4 cleanly hit 10. This readiness standard is working; reference it explicitly in future load discussions.
+
+## CI_024 — Late-day protein closes need concrete food framing
+Matt doesn't naturally reach for high-protein low-calorie foods when chasing evening protein targets. Generic "eat more protein" fails; he'll explore lower-protein options instead (cheese/crackers, PB/apple). 
+
+**What works:** Specific food suggestions tied to texture/flavor preference + calorie/protein clarity. When he needs an evening close, name the exact food and the macro hit ("cottage cheese + honey gets you ~20g protein, 100 cal" beats "pick a high-protein snack").
+
+**Example (2026-07-07):** Two nudges + clarification on cottage cheese prep → he executed and hit 155g. The honey + blueberries/banana framing closed it.
+
+## ci_024 — Supplement priorities for Matt
+Magnesium glycinate (200–400mg before bed) has real evidence for sleep quality improvement and is worth trialing for Matt — sleep is his #1 recovery lever. L-carnitine has weak evidence for fat loss and is not worth money. Creatine (already taking) + magnesium + multivitamin are the only three supplements with evidence-backed ROI for his goals.
+
+## CI_024 — Sleep protection as self-regulation
+Matt skipped sessions mid-week (2026-07-19) when sleep-deprived (job transition friction), citing back tightness and fatigue. This was the RIGHT call — he self-regulated intelligently instead of grinding through. This is growth in his coaching maturity. Lesson: validate the tradeoff when he makes it (sessions vs sleep); he has the instinct right.
+
+## ci_025 — Weekly planning rules locked (2026-07-22)
+Matt locked 6 non-negotiable rules for workout planning:
+1. Calendar week reset (Mon–Sun) — never rolling 7-day window
+2. Balanced sets across all 5 sessions — no overloaded/underloaded days
+3. Logical muscle group pairings (chest+tri, back+bi, etc.)
+4. Full MAV achieved every week across all muscle groups
+5. Expert review on every workout — pull get_exercise_progression on every lift, apply Israetel/Nippard SFR lens, never guess targets
+6. Full week planned before building any single day — Thu/Fri volumes scoped when building Wed sheet
+
+These were prompted by: rear delt fly being added unnecessarily, rolling window inflating shoulder set count, Thursday overloaded with core. Trust is built by showing the math up front.
+
+## ci_026 — Orphaned Sets Planning Error (2026-07-23)
+**Issue:** Built Mon–Thu without scoping the full week first. Back and shoulders ended Thursday with 2 and 1 sets remaining respectively — too small to program as a meaningful session, too many to ignore.
+
+**Root cause:** Violated Rule 6 (plan the full week before building any single day). Each day was built in isolation without confirming remaining sets across all groups would land cleanly on remaining days.
+
+**Fix:** Before building ANY session, map all 5 days' set distribution across all muscle groups and confirm each group hits MAV exactly (or at MRV max) by Friday with no fractional remainders. Orphaned 1–3 set remainders on Friday = planning error, not a programming choice.
+
+**Standard:** If a muscle group can't reach MAV in clean, meaningful blocks (minimum 3–4 sets per session), flag and rebalance earlier in the week. Never leave 1–2 orphaned sets for a day where they don't belong.
