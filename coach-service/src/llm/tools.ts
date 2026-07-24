@@ -17,6 +17,7 @@ import { e1rm, exerciseSeries, parseWorkoutDb, hardSetsInRange, sessionDatesInRa
 import { invalidateSnapshot } from '../coaching/snapshot.js';
 import { logMeal, PROTEIN_TARGET_G } from '../coaching/nutrition.js';
 import { ingestWorkout, annotateCompletion } from '../coaching/workoutIngest.js';
+import { classifyExercise } from '../coaching/exerciseClassification.js';
 
 /**
  * Tools Coach Vic can call. Bridge tools = read/write health data; memory tools =
@@ -337,6 +338,29 @@ export const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: 'object', properties: {} },
   },
   {
+    name: 'classify_exercise',
+    description:
+      'Record which muscle group an exercise trains, so its sets count toward weekly volume. ' +
+      'Use this whenever the snapshot flags an UNCLASSIFIED EXERCISE, or whenever Matt swaps in / ' +
+      'mentions a lift Vic has not classified — ASK him which muscle it primarily works (offer ' +
+      'your best guess), then record his answer here. This is authoritative: it overrides the ' +
+      'automatic classifier and persists, so a novel or mis-mapped exercise is fixed once and ' +
+      'stays fixed. Do NOT leave a swapped/novel exercise unclassified — its volume is invisible ' +
+      'until you do. Fold the question into any "how did it feel / effort / joints" debrief.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        exercise: { type: 'string', description: 'Exact exercise name as it appears in the sheet/log.' },
+        muscle: {
+          type: 'string',
+          enum: ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'core', 'warmup'],
+          description: 'Primary muscle group. Use "warmup" for prehab/mobility/ramp work that should not count as volume.',
+        },
+      },
+      required: ['exercise', 'muscle'],
+    },
+  },
+  {
     name: 'get_bodycomp_trend',
     description:
       'Body-composition trend from BODY_COMPOSITION: recent weight/BF% and the weight slope ' +
@@ -629,6 +653,19 @@ export async function executeTool(
             'snapshot ingest warning and call ingest_workout first.',
           muscles,
         });
+      }
+      case 'classify_exercise': {
+        const saved = await classifyExercise(input.exercise, input.muscle);
+        if (!saved) {
+          return ok(
+            `Could not classify "${input.exercise}" as "${input.muscle}" — muscle must be one of ` +
+              `chest, back, shoulders, biceps, triceps, legs, core, warmup.`,
+          );
+        }
+        return ok(
+          `Got it — "${input.exercise}" now counts as ${saved}. This is saved and will apply to ` +
+            `all past and future logs of that exercise.`,
+        );
       }
       case 'get_bodycomp_trend': {
         const rows = (await bridge.readSheet('BODY_COMPOSITION')) as unknown[][];

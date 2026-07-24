@@ -14,6 +14,7 @@ import {
   strainPattern,
   regressingLifts,
   muscleRetentionAlarm,
+  unclassifiedExercises,
   VOLUME_BANDS,
   type SetLog,
   type WhoopRow,
@@ -141,6 +142,23 @@ export async function buildSnapshot(): Promise<string> {
     );
   } else {
     lines.push('Training: no WORKOUT_DATABASE history yet.');
+  }
+
+  // ---- UNCLASSIFIED EXERCISES: novel lifts the volume counter can't place ----
+  // A swapped-in machine/cable variant the classifier doesn't know falls through
+  // to 'other' and its sets vanish from the weekly count. Surface it so Vic asks
+  // Matt (and calls classify_exercise) instead of silently under-counting.
+  {
+    const recentLogs = logs.filter((l) => daysSince(l.date) <= 21);
+    const unknown = unclassifiedExercises(recentLogs);
+    if (unknown.length) {
+      lines.push(
+        `⚠ UNCLASSIFIED EXERCISE(S) — not counted in any muscle's volume: ${unknown.map((e) => `"${e}"`).join(', ')}. ` +
+          `Ask Matt which muscle each primarily works (offer your best guess) and call ` +
+          `classify_exercise to record it — fold this into any "how did it feel / effort / joints" ` +
+          `debrief. Until classified, the weekly volume above under-counts these sets.`,
+      );
+    }
   }
 
   // ---- INGEST AUDIT: sheets built this week with nothing in the database ----

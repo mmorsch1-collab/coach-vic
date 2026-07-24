@@ -8,6 +8,8 @@ import {
   muscleRetentionAlarm,
   muscleOf,
   VOLUME_BANDS,
+  unclassifiedExercises,
+  setMuscleOverrides,
   type SetLog,
   type WhoopRow,
 } from '../src/coaching/metrics.js';
@@ -308,5 +310,31 @@ describe('VOLUME_BANDS matches WORKOUT_PROTOCOL.md', () => {
       legs: { mev: 6, mav: 10, mrv: 14 },
       core: { mev: 4, mav: 8, mrv: 12 },
     });
+  });
+});
+
+describe('unclassifiedExercises + overrides', () => {
+  const log = (exercise: string): SetLog => ({ date: '2026-07-24', session: '', exercise, weight: 100, reps: [10] });
+
+  it('flags exercises that fall through to other', () => {
+    const u = unclassifiedExercises([log('Sled Push'), log('Bench Press'), log('Battle Ropes')]);
+    expect(u).toContain('Sled Push');
+    expect(u).toContain('Battle Ropes');
+    expect(u).not.toContain('Bench Press');
+  });
+  it('dedups and is empty when everything is known', () => {
+    expect(unclassifiedExercises([log('Bench Press'), log('Bench Press'), log('Lat Pulldown')])).toEqual([]);
+  });
+
+  it('a taught override wins over the regex and clears the flag', () => {
+    expect(muscleOf('Sled Push')).toBe('other');
+    setMuscleOverrides({ 'sled push': 'legs' });
+    expect(muscleOf('Sled Push')).toBe('legs'); // case-insensitive
+    expect(unclassifiedExercises([log('Sled Push')])).toEqual([]);
+    // override can also CORRECT a confident-but-wrong classification
+    setMuscleOverrides({ 'bench press': 'shoulders' });
+    expect(muscleOf('Bench Press')).toBe('shoulders');
+    setMuscleOverrides({}); // reset so later tests see the pure classifier
+    expect(muscleOf('Bench Press')).toBe('chest');
   });
 });

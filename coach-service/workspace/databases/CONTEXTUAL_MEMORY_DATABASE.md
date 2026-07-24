@@ -233,6 +233,11 @@ Target: visible leanness at ~10% BF by ~June 30.
 On 2026-06-19, Matt called out a discrepancy in my volume summary (said 5 sessions, actually 4 — Monday 6/15 was skipped). He's paying close attention to the data. Always verify against the actual sheets (get_workout, get_muscle_volume) before summarizing a week. Memory of a conversation is not authoritative; the sheets are.
 
 ## ctx_024 — 3-week MAV push block (2026-06-20 lock)
+> **SUPERSEDED 2026-07-23 — do not use these numbers as current.** This split did NOT actually
+> reach MAV (Shoulders 12 vs MAV 14, Triceps 10 vs MAV 12, and Core 0 vs MAV 8 — core was absent).
+> The corrected split that lands every group on MAV is in WORKOUT_PROTOCOL.md ("Weekly split & MAV
+> targets, rebalanced 2026-07-23"). Kept below only as a dated record.
+
 Matt committed to full MAV volume for 3 weeks (job-transition window, high capacity). Split locked:
 - Mon: Chest 10 + Triceps 10
 - Tue: Back 14 + Biceps 6
@@ -301,6 +306,9 @@ Matt has sciatic nerve sensitivity and lower-back history. Before heavy leg day,
 **Coaching rule:** Until medical clearance received, NO AMRAP sets or max-effort grinding on bench press. Keep RIR ≥ 2–3 on all pressing. Thursday chest session should be light/technique-focused. Breathing cue: exhale on the press, never hold breath through hard reps.
 
 ## ctx_025 — Friday split addition: Legs 10 + Biceps 6
+> **SUPERSEDED 2026-07-23** by the rebalanced split in WORKOUT_PROTOCOL.md (adds Triceps 4 and
+> Core 4 so all seven groups hit MAV). Dated record only — do not program from these numbers.
+
 Locked on 2026-06-30: Friday session now includes **Biceps 6** in addition to Legs 10 (Matt corrected the split assumption). This ensures the weekly biceps total hits MAV (6 Tue + 6 Fri = 12 sets). 
 
 Updated weekly split (Mon–Fri):

@@ -3,6 +3,7 @@ import { logger } from '../logger.js';
 import { todayStr, yesterdayStr } from '../util/time.js';
 import { bridge } from '../bridge/client.js';
 import { ingestWorkout } from '../coaching/workoutIngest.js';
+import { parseWorkoutDb, unclassifiedExercises, daysSince } from '../coaching/metrics.js';
 import { todayProteinTotal } from '../coaching/nutrition.js';
 import { readDayUsage } from '../llm/usage.js';
 
@@ -42,6 +43,20 @@ export async function runDailyClose(): Promise<void> {
   // Gap: workout tab present but nothing filled in and nothing already logged.
   if (hasWorkoutTab && res.added === 0 && res.skipped === 0) {
     logger.warn({ date }, 'daily-close GAP: workout sheet not filled (Workout tab exists, zero actual sets)');
+  }
+
+  // Gap: novel exercises the classifier can't place (their volume is uncounted
+  // until Vic asks Matt and calls classify_exercise). Deterministic visibility;
+  // the snapshot surfaces the same list to the coach for action.
+  try {
+    const dbLogs = parseWorkoutDb((await bridge.readSheet('WORKOUT_DATABASE')) as unknown[][]);
+    const recent = dbLogs.filter((l) => daysSince(l.date) <= 21);
+    const unknown = unclassifiedExercises(recent);
+    if (unknown.length) {
+      logger.warn({ date, unknown }, 'daily-close GAP: unclassified exercises (volume uncounted until classified)');
+    }
+  } catch (err) {
+    logger.warn({ err, date }, 'daily-close: could not check unclassified exercises');
   }
 
   // Gap: a workout was logged/ingested today but no nutrition rows.

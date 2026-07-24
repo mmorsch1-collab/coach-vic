@@ -4,6 +4,7 @@ import { CoachBot } from './telegram/bot.js';
 import { DeliveryQueue } from './delivery/queue.js';
 import { registerJobs } from './scheduler/jobs.js';
 import { bridge } from './bridge/client.js';
+import { hydrateMuscleOverrides } from './coaching/exerciseClassification.js';
 
 /**
  * Coach Vic service entrypoint. Wires the Telegram bot, the retrying delivery
@@ -22,6 +23,11 @@ async function main(): Promise<void> {
   } catch (err) {
     logger.warn({ err }, 'Bridge API not reachable at startup — will keep trying on demand');
   }
+
+  // Load user-taught exercise classifications into the volume classifier.
+  await hydrateMuscleOverrides().catch((err) =>
+    logger.warn({ err }, 'Could not hydrate exercise classifications'),
+  );
 
   const bot = new CoachBot();
   const queue = new DeliveryQueue((text) => bot.sendMessage(text));

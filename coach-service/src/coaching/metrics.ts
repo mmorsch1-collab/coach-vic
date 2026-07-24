@@ -65,11 +65,48 @@ const MUSCLE_RULES: Array<[RegExp, string]> = [
   [/shoulder|ohp|overhead|lateral|delt|military|arnold|face.?pull|upright|landmine/i, 'shoulders'],
 ];
 
+/**
+ * User-taught classifications, keyed by lowercased exercise name. These WIN over
+ * the regex rules — when Matt tells Vic what muscle a novel exercise hits, that
+ * answer is authoritative and must stick, so a misclassification can never
+ * silently persist for an exercise the rules don't know. Hydrated at startup and
+ * after each write via setMuscleOverrides(); empty until then (pure default).
+ */
+let OVERRIDES: Record<string, string> = {};
+export function setMuscleOverrides(map: Record<string, string>): void {
+  OVERRIDES = {};
+  for (const [k, v] of Object.entries(map || {})) OVERRIDES[k.trim().toLowerCase()] = v;
+}
+
+export const KNOWN_MUSCLES = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'core', 'warmup'] as const;
+
 /** Muscle group for an exercise; 'warmup' for prehab/ramp rows (never counted). */
 export function muscleOf(exercise: string): string {
+  const key = exercise.trim().toLowerCase();
+  if (OVERRIDES[key]) return OVERRIDES[key]; // user-taught wins over everything
   if (isWarmup(exercise)) return 'warmup';
   for (const [re, m] of MUSCLE_RULES) if (re.test(exercise)) return m;
   return 'other';
+}
+
+/**
+ * Distinct exercise names in the given logs that the classifier can't place
+ * (fall through to 'other') and that have not been user-taught. These are the
+ * novel/unclassified exercises Vic must ask Matt about before their volume can
+ * count — the auto-detectable gap. A misclassification into a real-but-wrong
+ * muscle can't be caught here (the regex is confident), which is why Matt's
+ * taught overrides always win.
+ */
+export function unclassifiedExercises(logs: SetLog[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const l of logs) {
+    const name = l.exercise.trim();
+    if (!name || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    if (muscleOf(name) === 'other') out.push(name);
+  }
+  return out;
 }
 
 export interface SetLog {
