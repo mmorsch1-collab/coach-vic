@@ -10,6 +10,8 @@ import {
   VOLUME_BANDS,
   unclassifiedExercises,
   setMuscleOverrides,
+  progressionTarget,
+  type SessionPoint,
   type SetLog,
   type WhoopRow,
 } from '../src/coaching/metrics.js';
@@ -384,4 +386,46 @@ describe('workout feedback aggregation', () => {
     );
     expect(r['Bench'].rir).toBe(0);
   });
+});
+
+describe('progressionTarget (ground the prefill, not the last outlier)', () => {
+  const s = (weights: Array<[string, number, number]>): SessionPoint[] =>
+    weights.map(([date, weight, topReps]) => ({ date, weight, topReps, topE1rm: 0 }));
+
+  it('flags a one-off load jump as unverified and suggests the established weight', () => {
+    // Hammer Curl: 15 for six sessions, then a single 30.
+    const t = progressionTarget(s([
+      ['2026-06-10', 15, 11], ['2026-06-23', 15, 12], ['2026-06-30', 15, 13],
+      ['2026-07-07', 15, 14], ['2026-07-10', 15, 15], ['2026-07-21', 30, 8],
+    ]))!;
+    expect(t.establishedWeight).toBe(15);
+    expect(t.verified).toBe(false);
+    expect(t.suggestedWeight).toBe(15);
+  });
+
+  it('treats a normal small progression as verified', () => {
+    // Leg Press: 180,180,180,190,200 → 200 is +11% over established 180.
+    const t = progressionTarget(s([
+      ['2026-06-19', 180, 10], ['2026-06-26', 180, 10], ['2026-07-02', 180, 11],
+      ['2026-07-05', 190, 11], ['2026-07-08', 200, 12],
+    ]))!;
+    expect(t.verified).toBe(true);
+    expect(t.suggestedWeight).toBe(200);
+  });
+
+  it('always yields a number when history exists (no blank targets)', () => {
+    const t = progressionTarget(s([['2026-07-01', 75, 12], ['2026-07-08', 75, 12]]))!;
+    expect(t.suggestedWeight).toBe(75);
+  });
+
+  it('returns null only with no history', () => {
+    expect(progressionTarget([])).toBeNull();
+  });
+});
+
+describe('deadlift classification (all variants → legs)', () => {
+  for (const d of ['Deadlift', 'Conventional Deadlift', 'Trap Bar Deadlift', 'Sumo Deadlift', 'Romanian Deadlift']) {
+    it(`${d} -> legs`, () => expect(muscleOf(d)).toBe('legs'));
+  }
+  it('bent-over row still -> back', () => expect(muscleOf('Bent-over Barbell Row')).toBe('back'));
 });

@@ -13,7 +13,7 @@ import { appendEntry, DB_FILES, type DbFile } from '../memory/databases.js';
 import { todayStr, calendarWeek } from '../util/time.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
-import { e1rm, exerciseSeries, parseWorkoutDb, hardSetsInRange, sessionDatesInRange, slopePerWeek, VOLUME_BANDS, bestE1rmBefore } from '../coaching/metrics.js';
+import { e1rm, exerciseSeries, parseWorkoutDb, hardSetsInRange, sessionDatesInRange, slopePerWeek, progressionTarget, VOLUME_BANDS, bestE1rmBefore } from '../coaching/metrics.js';
 import { invalidateSnapshot } from '../coaching/snapshot.js';
 import { logMeal, PROTEIN_TARGET_G } from '../coaching/nutrition.js';
 import { ingestWorkout, annotateCompletion } from '../coaching/workoutIngest.js';
@@ -653,7 +653,24 @@ export async function executeTool(
         const series = exerciseSeries(logs, input.exercise);
         const limited = series.slice(-(input.limit ?? 10));
         const slope = slopePerWeek(series.slice(-6).map((p) => ({ date: p.date, y: p.topE1rm })));
-        return json({ exercise: input.exercise, sessions: limited, e1rm_slope_per_week: Math.round(slope * 10) / 10 });
+        const target = progressionTarget(series);
+        return json({
+          exercise: input.exercise,
+          sessions: limited,
+          e1rm_slope_per_week: Math.round(slope * 10) / 10,
+          // Grounded prefill: use suggested_weight, NOT the last row's weight.
+          // Prevents prescribing a one-off load jump (e.g. Hammer Curl 30 after a
+          // history of 15) and guarantees a number when history exists.
+          target: target
+            ? {
+                suggested_weight: target.suggestedWeight,
+                established_weight: target.establishedWeight,
+                last_weight: target.lastWeight,
+                verified: target.verified,
+                guidance: target.note,
+              }
+            : { guidance: 'No history — establish a baseline this session; do NOT prefill a guessed weight.' },
+        });
       }
       case 'get_muscle_volume': {
         const rows = await bridge.readSheet('WORKOUT_DATABASE');

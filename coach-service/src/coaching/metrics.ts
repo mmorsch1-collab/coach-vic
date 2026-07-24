@@ -57,10 +57,13 @@ const MUSCLE_RULES: Array<[RegExp, string]> = [
   [/tricep|pushdown|push\s?down|skull|kickback|(overhead|french).*(ext|extension)/i, 'triceps'],
   // Posterior-chain / low-back: back-ext, hyper, good-morning, reverse hyper.
   // Grouped with legs (glute/ham/erector) so they never read as lat "back".
-  [/squat|lunge|leg\s?press|leg\s?ext|leg\s?curl|hamstring|quad|calf|rdl|romanian|glute|hip\s?thrust|thigh|abduct|adduct|(back|hyper)\s?ext|hyperext|reverse\s?hyper|good\s?morning/i, 'legs'],
+  // Deadlift variants live here (posterior chain), consistent with RDL and how
+  // Matt tracks them — a plain/trap-bar/sumo deadlift is a leg exercise, not a
+  // lat exercise. (Was previously in the back rule, so "Deadlift" mis-counted.)
+  [/squat|lunge|leg\s?press|leg\s?ext|leg\s?curl|hamstring|quad|calf|rdl|romanian|deadlift|glute|hip\s?thrust|thigh|abduct|adduct|(back|hyper)\s?ext|hyperext|reverse\s?hyper|good\s?morning/i, 'legs'],
   [/curl|bicep/i, 'biceps'],
   // "row" anywhere ⇒ back (catches "Chest Supported Row" before the chest rule).
-  [/\brow\b|pull.?up|pull.?down|lat\s?pull|chin.?up|deadlift|\bback\b|shrug|pullover/i, 'back'],
+  [/\brow\b|pull.?up|pull.?down|lat\s?pull|chin.?up|\bback\b|shrug|pullover/i, 'back'],
   [/bench|chest|pec|\bfly|flye|\bdip|push.?up|(incline|flat|decline).*(press|bench|fly)|incline\s?(db|dumbbell|barbell)\s*$/i, 'chest'],
   [/shoulder|ohp|overhead|lateral|delt|military|arnold|face.?pull|upright|landmine/i, 'shoulders'],
 ];
@@ -208,6 +211,53 @@ export function slopePerWeek(points: Array<{ date: string; y: number }>): number
   const denom = n * sxx - sx * sx;
   if (denom === 0) return 0;
   return ((n * sxy - sx * sy) / denom) * 7;
+}
+
+/**
+ * The weight to actually prescribe for a lift, grounded in its ESTABLISHED
+ * working weight rather than the single most-recent number.
+ *
+ * Why this exists: Hammer Curl was logged at 15 lb for seven straight sessions,
+ * then once at 30×8 — and the next workout prescribed 30, treating a one-off
+ * aggressive jump as the new baseline. The established weight (a load hit in ≥2
+ * of the recent sessions) is 15; 30 is an UNVERIFIED +100% jump and should not
+ * be prescribed as a target. Contrast Leg Press 180→190→200: 200 is only +11%
+ * over the established 180, a normal progression, so it's verified.
+ *
+ * Rule: unverified when the last weight is >15% above the established weight and
+ * was hit in only one recent session. Suggested target = the last weight when
+ * verified, else the established weight (progress reps there first). Never
+ * returns a blank — if there's any history, there's a number to prefill, which
+ * also stops "logged before but no starting weight" gaps.
+ */
+export interface ProgressionTarget {
+  establishedWeight: number; // load hit in ≥2 recent sessions (else the min recent)
+  lastWeight: number;
+  lastReps: number;
+  jumpPct: number; // last vs established, %
+  verified: boolean; // is the last weight a trustworthy working weight?
+  suggestedWeight: number; // what to prefill
+  note: string;
+}
+export function progressionTarget(series: SessionPoint[], recentN = 6): ProgressionTarget | null {
+  if (!series.length) return null;
+  const recent = series.slice(-recentN);
+  const last = recent[recent.length - 1];
+  // Established = the highest weight appearing in ≥2 recent sessions; if nothing
+  // repeats, the lowest recent weight (the clearly-owned load).
+  const counts = new Map<number, number>();
+  for (const p of recent) counts.set(p.weight, (counts.get(p.weight) ?? 0) + 1);
+  const repeated = [...counts.entries()].filter(([, c]) => c >= 2).map(([w]) => w);
+  const established = repeated.length ? Math.max(...repeated) : Math.min(...recent.map((p) => p.weight));
+  const jumpPct = established > 0 ? Math.round(((last.weight - established) / established) * 100) : 0;
+  const lastTimesSeen = counts.get(last.weight) ?? 0;
+  const verified = last.weight <= established || jumpPct <= 15 || lastTimesSeen >= 2;
+  const suggestedWeight = verified ? last.weight : established;
+  const note = verified
+    ? `Working weight ${suggestedWeight}. Last ${last.weight}×${last.topReps}.`
+    : `Last ${last.weight}×${last.topReps} is an UNVERIFIED +${jumpPct}% jump over the established ${established} (hit once). ` +
+      `Prescribe ${established} and progress reps/verify before loading up.`;
+  return { establishedWeight: established, lastWeight: last.weight, lastReps: last.topReps, jumpPct, verified, suggestedWeight, note };
 }
 
 export function daysSince(dateStr: string): number {

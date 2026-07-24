@@ -19,13 +19,19 @@ Matt has a **finicky lower back and left hip** that can spasm. This is a hard co
 exercise selection, not a preference. Two jobs, always both: **(1) don't trigger it, (2) build
 its resilience.**
 
-**Avoid or approach with caution (never program without a reason, and never load heavy on a
-low-recovery / under-slept day):**
-- Heavy spinal loading under fatigue — conventional deadlifts from the floor, heavy barbell
-  bent-over rows, heavy back squats late in a session.
-- **Loaded lumbar flexion** (rounding under load) and ballistic/jerky reps.
-- Anything that has spasmed him before — if a lift has a history of tweaking his back, substitute
-  it (see substitution rules in WORKOUT_PROTOCOL.md); don't re-test it heavy.
+**Do NOT program these (hard rule — Matt will skip them anyway):**
+- **Deadlifts of any kind — conventional, Romanian/RDL, sumo, trap-bar.** His logged note flags
+  sciatic sensitivity, and on 2026-07-24 an RDL was programmed and he skipped it. Use the
+  spine-safe posterior-chain swaps instead: **seated/lying leg curl, glute-bridge or hip-thrust
+  machine, back extension (light).** Never put a loaded floor hinge in his sheet.
+- Heavy barbell bent-over rows (use chest-supported / seated cable row) and heavy back squats late
+  in a session (use hack squat / leg press / pendulum squat).
+
+**Avoid or approach with caution:**
+- **Loaded lumbar flexion** (rounding under load, weighted cable crunches) and ballistic/jerky reps.
+  Prefer anti-movement core (dead bug, bird dog, side plank, Pallof).
+- Anything that has spasmed him before — substitute it (see WORKOUT_PROTOCOL.md), don't re-test heavy.
+- Never load heavy on a low-recovery / under-slept day.
 
 **Prefer (same stimulus, spine-friendly — these are the default swaps):**
 - **Supported / machine variants:** chest-supported row instead of bent barbell row; hack squat,

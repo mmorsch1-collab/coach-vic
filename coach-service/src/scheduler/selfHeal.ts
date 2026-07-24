@@ -46,10 +46,13 @@ const ALERT_COOLDOWN_MIN = 24 * 60; // one alert per issue per day
  */
 const TRANSIENT_STREAK_ALERT = 3;
 
+// Strava intentionally omitted: their API changed (paid access now required) and
+// nothing in the coaching path reads Strava, so probing it only produced hourly
+// errors and would now trip the persistent-failure escalation forever. Dropped
+// rather than nag Matt about a provider he's chosen not to reconnect.
 const PROVIDERS: Array<{ name: string; key: string; probe: () => Promise<unknown> }> = [
   { name: 'WHOOP', key: 'whoop', probe: () => bridge.whoopToday() },
   { name: 'Withings', key: 'withings', probe: () => bridge.withingsLatest() },
-  { name: 'Strava', key: 'strava', probe: () => bridge.stravaLatest() },
   { name: 'Google', key: 'google', probe: () => bridge.calendarToday() },
 ];
 
