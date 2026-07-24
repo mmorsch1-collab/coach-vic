@@ -52,9 +52,18 @@ intensity. (See SCIENCE.md.)
 - **Priority:** chest/upper (weak point + preference), 2×/week. Legs maintenance only.
 - **Volume:** target the weekly hard-set landmarks per muscle (use `get_muscle_volume`): chest/back
   ~10–16, legs ~6–8. Protect this; don't slash it on a yellow day.
-- **While GOAL.md says deficit:** plan each muscle in the LOWER HALF of its band (chest, as the
-  priority, may sit mid-band). Hold sets flat week to week — do NOT accumulate sets toward MAV
-  until maintenance. In a cut you trim fatigue, never intensity: load stays heavy.
+- **Volume in a deficit — MAV is the target, not the lower half (updated 2026-07-23).** Matt's
+  stated mandate: *build muscle while losing weight*, hitting MAV across all groups for
+  hypertrophy, with diet handling the BF% side. So **program to MAV every week** (Weekly Planning
+  Rules 4 and 7) rather than parking each muscle in the lower half of its band.
+  - This supersedes the previous "lower half / do NOT accumulate toward MAV until maintenance"
+    rule, which contradicted Rule 4 and systematically under-programmed him.
+  - **In a cut you trim fatigue, never intensity or volume: load stays heavy and sets stay at MAV.**
+    The deficit is managed by food, not by cutting his training stimulus — pulling volume in a
+    deficit is what *causes* muscle loss, which is the exact outcome the guardrails exist to prevent.
+  - The brakes are the muscle-retention alarm (GOAL.md — all three conditions) and MRV, not a
+    blanket volume reduction. If recovery genuinely can't support MAV, cap **intensity** first
+    (RIR), and only then trim sets for the specific muscle showing the problem.
 - **Session cap ~10 hard sets per muscle.** If the weekly landmark won't fit in one day, push the
   overflow to a second day (rear-delt/upper-back volume on shoulders day; chest's 2nd weekly hit
   as 3–4 sets on another upper day).
@@ -235,3 +244,5 @@ Core is programmed deliberately on Shoulders day (Wed) and Legs day (Fri) — no
 **Core MAV sets = anterior/lateral core work only** (cable crunches, hanging leg raises, ab wheel, dead bugs, pallof press). Lower back warm-up on Fri is prehab — not counted toward core MAV sets.
 
 Shoulders day is a clean pairing for core — no anterior core interference from pressing movements. Legs day core lands fresh after lower-body compounds.
+## Ingest is Coach Vic's job
+Matt fills in the sheet — that is his only job. Calling `ingest_workout` after every completed session is Coach Vic's responsibility. Never ask Matt to run ingest or any technical command. When Matt says he finished a workout, ingest it immediately.

@@ -53,6 +53,24 @@ Action: (1) raise protein toward 1.2g/lb, (2) shrink deficit toward maintenance,
 ## Monthly Body Comp Review
 Formally check BF% + muscle mass trend every 4 weeks against the Miami goal timeline (~0.3–0.5% BF/month reduction). Consistent morning weigh-ins (post-void, pre-food) required for clean signal — scattered measurement times add noise.
 
+## Stated mandate (Matt, 2026-07-23) — training intent
+Matt's own framing, and the tie-breaker when this file's "reveal + retain, not bulk" language
+seems to argue for less training:
+
+- **Build muscle WHILE losing weight** — recomposition, not a holding pattern. "Retain" is the
+  floor, not the ceiling.
+- **Hit MAV across all muscle groups** every week to drive hypertrophy (see WORKOUT_PROTOCOL.md
+  Weekly Planning Rules 4 and 7). Do not park muscles in the lower half of their bands.
+- **Matt owns the diet.** He drives BF% through food and is not asking for daily nutrition
+  coaching (see the hands-off protein rule above). Vic's job is the *training* side.
+- **WHOOP + Withings guide training and hold him accountable to the body-comp goal** — recovery
+  and trend data modulate intensity and flag problems; they do not justify cutting volume.
+- **Stretch goal: ~8% BF by end of 2026**, with 9–10% as the realistic primary milestone.
+
+"Low hypertrophy responder" describes his *rate*, not a reason to program less. A low responder in
+a deficit needs MAV volume and heavy load to hold and add tissue — under-programming is the failure
+mode, not the safe choice.
+
 ## Weekly WHOOP Signal Check
 - HRV 7-day avg drops >10% AND holds 3+ consecutive days → flag, watch rep quality, do not act on HRV alone
 - Training strain on workout days should be ~12–15; consistently <10 = undertrained; >16 multiple days = recovery debt building
