@@ -258,6 +258,15 @@ describe('muscleOf', () => {
     ['Incline DB Press (KEY LIFT)', 'chest'],
     ['Romanian Deadlift', 'legs'],
     ['Lat Pulldown', 'back'],
+    // Gym machine substitutes (Matt swaps freely at a full gym).
+    ['Chest Supported Row', 'back'],
+    ['Rear Delt Fly Machine', 'shoulders'],
+    ['Reverse Pec Deck', 'shoulders'],
+    ['Back Extension', 'legs'],
+    ['Reverse Hyper', 'legs'],
+    ['Landmine Press', 'shoulders'],
+    ['Machine Curl', 'biceps'],
+    ['Glute Bridge Machine', 'legs'],
   ];
   for (const [name, want] of cases) {
     it(`${name} -> ${want}`, () => expect(muscleOf(name)).toBe(want));

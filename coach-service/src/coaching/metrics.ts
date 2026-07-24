@@ -51,13 +51,18 @@ export function isWarmup(exercise: string): boolean {
  *    across 10 sessions.
  */
 const MUSCLE_RULES: Array<[RegExp, string]> = [
-  [/pallof|ab\s?wheel|dead\s?bug|hollow|russian\s?twist|(leg|knee)\s?raise|crunch|plank|sit.?up|\babs?\b|core|farmer/i, 'core'],
+  [/pallof|ab\s?wheel|dead\s?bug|hollow|russian\s?twist|(leg|knee)\s?raise|crunch|plank|sit.?up|\babs?\b|core|farmer|bird\s?dog/i, 'core'],
+  // Rear-delt work reads as shoulders, not chest, even though it says "fly".
+  [/rear.?delt|reverse.?(fly|flye|pec|delt)|rear.?fly/i, 'shoulders'],
   [/tricep|pushdown|push\s?down|skull|kickback|(overhead|french).*(ext|extension)/i, 'triceps'],
-  [/squat|lunge|leg\s?press|leg\s?ext|leg\s?curl|hamstring|quad|calf|rdl|romanian|glute|hip\s?thrust|thigh|abduct|adduct/i, 'legs'],
+  // Posterior-chain / low-back: back-ext, hyper, good-morning, reverse hyper.
+  // Grouped with legs (glute/ham/erector) so they never read as lat "back".
+  [/squat|lunge|leg\s?press|leg\s?ext|leg\s?curl|hamstring|quad|calf|rdl|romanian|glute|hip\s?thrust|thigh|abduct|adduct|(back|hyper)\s?ext|hyperext|reverse\s?hyper|good\s?morning/i, 'legs'],
   [/curl|bicep/i, 'biceps'],
+  // "row" anywhere ⇒ back (catches "Chest Supported Row" before the chest rule).
+  [/\brow\b|pull.?up|pull.?down|lat\s?pull|chin.?up|deadlift|\bback\b|shrug|pullover/i, 'back'],
   [/bench|chest|pec|\bfly|flye|\bdip|push.?up|(incline|flat|decline).*(press|bench|fly)|incline\s?(db|dumbbell|barbell)\s*$/i, 'chest'],
-  [/row|pull.?up|pull.?down|lat\s?pull|chin.?up|deadlift|\bback\b|shrug|pullover/i, 'back'],
-  [/shoulder|ohp|overhead|lateral|delt|military|arnold|face.?pull|upright/i, 'shoulders'],
+  [/shoulder|ohp|overhead|lateral|delt|military|arnold|face.?pull|upright|landmine/i, 'shoulders'],
 ];
 
 /** Muscle group for an exercise; 'warmup' for prehab/ramp rows (never counted). */

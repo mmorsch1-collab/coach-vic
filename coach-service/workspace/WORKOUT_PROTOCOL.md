@@ -107,7 +107,34 @@ intensity. (See SCIENCE.md.)
 - Heavy compounds preserve muscle in a deficit. Min 48h between same muscle. Deload ~every 6 wks or if
   e1RM regresses across lifts while the multi-day recovery trend is down.
 
+## Exercise substitution — Matt trains at a full gym (2026-07-24)
+Matt regularly trains at a **complete gym with a good machine selection** and will **swap the
+exercise you prefilled for an equivalent** he prefers or that his back/hip tolerates better (e.g.
+cable curl → machine curl, floor deadlift → glute-bridge machine, barbell row → chest-supported
+row). Honor this — a swap is not a deviation to correct.
+
+Rules when he substitutes:
+1. **Map the swap to the same muscle and movement pattern.** A machine curl still fills the biceps
+   MAV target; a glute-bridge machine still fills the hip-hinge/posterior slot. The set/rep scheme
+   and the weekly MAV target for that muscle **do not change** — only the tool does. Volume counting
+   already classifies the common machine variants correctly.
+2. **Progression history is per-exercise-name**, so a brand-new machine starts a fresh e1RM thread.
+   That's expected — don't call it a stall or a regression. Establish the new baseline that day
+   (blank/placeholder target, confirm his working weight), then progress it normally from there.
+   Recognize the swap as continuing the same muscle's stimulus even though the number resets.
+3. **Prefer the substitute when it's the back/hip-safer option** (see USER.md). If Matt swaps a
+   floor deadlift or heavy bent row for a supported/machine variant, that's the right call — don't
+   push him back to the barbell version.
+4. **If the swap changes the muscle worked**, re-check the week's MAV map (Rules 4/7): flag if it
+   leaves a group short or overloads another, and rebalance rather than silently accepting a gap.
+5. **When he tells you what he swapped to and the numbers he hit**, write them into the sheet
+   (`update_sheet_range`) so `ingest_workout` captures the real exercise, not the prefilled one.
+
 ## Step 4 — Exercise preferences (honor these)
+- **Lower back / left hip is finicky (can spasm) — see USER.md.** Default to spine-supported
+  variants, avoid heavy floor deadlifts / heavy bent rows especially on low-recovery days, and
+  program the resilience work (dead bug, bird dog, side plank, Pallof, glute bridges, hip CARs).
+  The back's actual feel outranks the plan; on a tweak, drop hinge/squat LOAD (keep the sets).
 - **Core work is programmed deliberately on appropriate days** (not a daily plank routine).
   Program 2–3 targeted core exercises (e.g., cable crunches, hanging leg raises, ab wheel,
   pallof press, dead bugs) on days where it fits — typically not on the same day as heavy

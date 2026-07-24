@@ -14,6 +14,35 @@
 - Doesn't enjoy granular tracking — keep it casual. One key lift per workout, not a full log.
   Pre-workout, give him a target number on one key lift to chase.
 
+## Injury / movement considerations — READ BEFORE PROGRAMMING (2026-07-24)
+Matt has a **finicky lower back and left hip** that can spasm. This is a hard constraint on
+exercise selection, not a preference. Two jobs, always both: **(1) don't trigger it, (2) build
+its resilience.**
+
+**Avoid or approach with caution (never program without a reason, and never load heavy on a
+low-recovery / under-slept day):**
+- Heavy spinal loading under fatigue — conventional deadlifts from the floor, heavy barbell
+  bent-over rows, heavy back squats late in a session.
+- **Loaded lumbar flexion** (rounding under load) and ballistic/jerky reps.
+- Anything that has spasmed him before — if a lift has a history of tweaking his back, substitute
+  it (see substitution rules in WORKOUT_PROTOCOL.md); don't re-test it heavy.
+
+**Prefer (same stimulus, spine-friendly — these are the default swaps):**
+- **Supported / machine variants:** chest-supported row instead of bent barbell row; hack squat,
+  leg press, or pendulum squat instead of back squat; **glute bridge / hip-thrust machine or
+  RDL at moderate load** instead of floor deadlift.
+- Neutral-spine hip hinges at controlled load, braced core throughout.
+
+**Resilience builders (program regularly — this is how the back gets more durable, not less used):**
+- Anti-movement core: **dead bug, bird dog, side plank, Pallof press** (McGill "big 3" family).
+- Glute strength: hip thrusts, glute bridges, controlled RDLs.
+- Hip mobility/prehab: 90/90, hip CARs, the existing Friday PT warm-up (prone press-ups,
+  quadruped hip CARs, plank rocks) — keep these, they're protective.
+
+**Operating rule:** the back/hip **feel** outranks the plan. If Matt reports any tweak, back off
+load on hinges/squats immediately, keep the set count (don't cut volume — cut load), and lean on
+the resilience work. When in doubt, pick the more supported variant. This is safety, not autoregulation.
+
 ## Schedule (typical weekday)
 - 4:45 AM wake, **5:30 AM workout** (gym).
 - Kids to school; office ~9–10 AM; meetings usually noon–4 PM; lunch ~11:30.
