@@ -102,6 +102,13 @@ export class BridgeClient {
   whoopSnapshot(snapshot: Record<string, unknown>) {
     return this.request('POST', '/coaching/whoop-snapshot', snapshot);
   }
+  /** Backfill helper: SCORED WHOOP rows over a date range, joined recovery+cycle+sleep. */
+  whoopHistoryRange(start: string, end: string) {
+    return this.request<Array<{
+      date: string; recovery: number | null; hrv: number | null; restingHeartRate: number | null;
+      sleepHours: number | null; sleepScore: number | null; strain: number | null; skinTemp: number | null;
+    }>>('GET', `/whoop/history-range?start=${start}&end=${end}`);
+  }
   whoopHistory(days = 7) {
     return this.request<unknown[]>('GET', `/coaching/whoop-history?days=${days}`);
   }

@@ -335,4 +335,83 @@ router.get(
   })
 );
 
+/**
+ * GET /whoop/history-range?start=YYYY-MM-DD&end=YYYY-MM-DD
+ *
+ * Backfill helper: returns one row per SCORED recovery in the window, joined to
+ * its cycle (strain) and sleep (hours/score) by the recovery's cycle_id /
+ * sleep_id — an exact ID join, not a fuzzy date match. Used to close gaps in
+ * WHOOP_History when the nightly logger was not running. Read-only.
+ */
+router.get(
+  '/history-range',
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!(await whoopAuth.isAuthenticated())) {
+      throw new AppError(401, 'Not authenticated. Visit /auth/whoop/start.', 'NOT_AUTHENTICATED');
+    }
+    const start = String(req.query.start ?? '');
+    const end = String(req.query.end ?? '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+      throw new AppError(400, 'start and end must be YYYY-MM-DD', 'BAD_RANGE');
+    }
+    const startISO = new Date(`${start}T00:00:00Z`).toISOString();
+    const endISO = new Date(`${end}T23:59:59Z`).toISOString();
+
+    // Page a WHOOP collection endpoint (max 25/page) until exhausted or capped.
+    async function pageAll<T>(path: string, version: 'v1' | 'v2'): Promise<T[]> {
+      const out: T[] = [];
+      let token: string | undefined;
+      for (let i = 0; i < 40; i++) {
+        const q = `${path}${path.includes('?') ? '&' : '?'}start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}&limit=25${token ? `&nextToken=${encodeURIComponent(token)}` : ''}`;
+        const resp = await whoopAuth.makeApiRequest<{ records: T[]; next_token?: string }>(q, version);
+        out.push(...(resp.records ?? []));
+        token = resp.next_token;
+        if (!token) break;
+      }
+      return out;
+    }
+
+    const [recoveries, cycles, sleeps] = await Promise.all([
+      pageAll<any>('/recovery', 'v2'),
+      pageAll<any>('/cycle', 'v1'),
+      pageAll<any>('/activity/sleep', 'v2'),
+    ]);
+
+    const strainByCycle = new Map<string, number>();
+    for (const c of cycles) if (c?.id != null) strainByCycle.set(String(c.id), c?.score?.strain);
+    const sleepById = new Map<string, any>();
+    for (const s of sleeps) if (s?.id != null) sleepById.set(String(s.id), s);
+
+    const sleepHours = (s: any): number | null => {
+      const st = s?.score?.stage_summary;
+      if (!st) return null;
+      const ms = (st.total_light_sleep_time_milli || 0) + (st.total_slow_wave_sleep_time_milli || 0) + (st.total_rem_sleep_time_milli || 0);
+      return ms ? Math.round((ms / 3_600_000) * 100) / 100 : null;
+    };
+
+    const rows = recoveries
+      .filter((r) => r?.score_state === 'SCORED' && r?.created_at)
+      .map((r) => {
+        const s = r.sleep_id != null ? sleepById.get(String(r.sleep_id)) : undefined;
+        const skinC = r.score?.skin_temp_celsius;
+        return {
+          date: new Date(r.created_at).toISOString().split('T')[0],
+          recovery: r.score?.recovery_score ?? null,
+          hrv: r.score?.hrv_rmssd_milli ?? null,
+          restingHeartRate: r.score?.resting_heart_rate ?? null,
+          sleepHours: s ? sleepHours(s) : null,
+          sleepScore: s?.score?.sleep_performance_percentage ?? null,
+          strain: r.cycle_id != null ? (strainByCycle.get(String(r.cycle_id)) ?? null) : null,
+          skinTemp: skinC != null ? Math.round(((skinC * 9) / 5 + 32) * 100) / 100 : null,
+        };
+      })
+      // One row per date; keep the first (WHOOP returns newest-first).
+      .filter((row, i, arr) => arr.findIndex((x) => x.date === row.date) === i)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const response: SuccessResponse<typeof rows> = { success: true, data: rows };
+    res.json(response);
+  })
+);
+
 export default router;
