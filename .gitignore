@@ -69,3 +69,4 @@ sheets-export/
 
 # Claude Code local session state
 .claude/
+coach-service/workspace/*.bak
