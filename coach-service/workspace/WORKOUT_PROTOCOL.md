@@ -241,6 +241,15 @@ All five would agree on the framework below. Where they diverge, the call is not
 
 6. **Plan the full week before building the day.** Map all 5 sessions at the start of the week. When building Wednesday's sheet, Thursday and Friday's planned sets are already scoped — day volume is never over or under.
 
+0. **Plan to the target, don't assemble-then-label (2026-07-24).** Start every session from the
+   number: `get_muscle_volume` gives `sets_to_mav` per muscle — build exercises to hit exactly that,
+   then confirm `create_workout`'s `built_set_counts` equals what you intended. Do NOT pick
+   exercises and round the total up to "MAV ✓." On 2026-07-24 a leg session was built to 13 sets
+   against a MAV of 10 (an extra exercise added without checking the total) and reported as 10 —
+   the plan didn't equal the intent. If `create_workout` returns `planning_warnings`, the sheet
+   drifted: trim it to the target, or state the deliberate reason for the overshoot. Overshooting
+   one muscle while another is short of MAV is a planning error, not a judgment call.
+
 7. **No orphaned sets — map the whole week before building ANY sheet.** Before building a single
    workout sheet, write out the full week's set distribution across **every** muscle group (Mon→Fri)
    and verify each group lands exactly on MAV by Friday with **no fractional remainder**.

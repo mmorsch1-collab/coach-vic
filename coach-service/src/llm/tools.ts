@@ -562,13 +562,42 @@ export async function executeTool(
           const add = built[mu] || 0;
           const proj = (weekNow[mu] || 0) + add;
           const b = VOLUME_BANDS[mu];
-          return { muscle: mu, this_sheet: add, week_after: proj, mav: b.mav, mrv: b.mrv, status: proj > b.mrv ? 'OVER_MRV' : proj >= b.mav ? 'at_MAV' : `${b.mav - proj}_to_MAV` };
+          const status =
+            proj > b.mrv ? 'OVER_MRV' : proj > b.mav ? `over_MAV_by_${proj - b.mav}` : proj === b.mav ? 'at_MAV' : `${b.mav - proj}_to_MAV`;
+          return { muscle: mu, this_sheet: add, week_after: proj, mav: b.mav, mrv: b.mrv, status };
         });
+        // PLANNING DISCIPLINE CHECK. The intent is to hit each muscle's MAV — no
+        // more, no less. Building a muscle PAST its MAV while another is still
+        // short is undisciplined drift (on 2026-07-24 legs were built to 13 vs a
+        // MAV of 10 while back/shoulders were short). Flag it so the plan is
+        // reconciled to intent BEFORE the sheet is presented, not after.
+        // Only flag overshoot for muscles THIS sheet contributes to — a leg day
+        // shouldn't nag about chest already being over from earlier in the week.
+        const overshoot = projection.filter((p) => p.this_sheet > 0 && p.week_after > p.mav);
+        const short = projection.filter((p) => p.week_after < p.mav);
+        const planningWarnings: string[] = [];
+        for (const o of overshoot) {
+          planningWarnings.push(
+            `${o.muscle} built to ${o.week_after} vs MAV ${o.mav} (+${o.week_after - o.mav} over). ` +
+              `Was that deliberate? If not, trim to ${o.mav}.`,
+          );
+        }
+        if (overshoot.length && short.length) {
+          planningWarnings.push(
+            `IMBALANCE: overshooting [${overshoot.map((o) => o.muscle).join(', ')}] while [${short
+              .map((s) => `${s.muscle} (+${s.mav - s.week_after} short)`)
+              .join(', ')}] miss MAV. Rebalance before presenting.`,
+          );
+        }
         return json({
           ...result,
           built_set_counts: built,
           week_projection: projection,
-          report_rule: 'Report these built_set_counts to Matt — NOT a remembered plan. If a number differs from what you intended, the SHEET is the source of truth; reconcile before telling him anything.',
+          planning_warnings: planningWarnings.length ? planningWarnings : undefined,
+          report_rule:
+            'Report built_set_counts to Matt, NOT a remembered plan. If planning_warnings is present, ' +
+            'the built sheet DRIFTED from the MAV target — reconcile the sheet (or state the deliberate ' +
+            'reason for the overshoot) BEFORE presenting it. The plan must equal the intent.',
         });
       }
       case 'save_whoop_snapshot':
