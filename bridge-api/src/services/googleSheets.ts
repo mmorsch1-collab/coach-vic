@@ -447,7 +447,9 @@ export class GoogleSheetsService {
         try {
           const createResponse = await sheets.spreadsheets.batchUpdate({
             spreadsheetId: this.SPREADSHEET_ID,
-            requestBody: { requests: [{ addSheet: { properties: { title: sheetTitle } } }] },
+            // index 0: today's workout is always the FIRST tab, so opening the
+            // workbook (or a gid-less link) lands on it instead of a random tab.
+            requestBody: { requests: [{ addSheet: { properties: { title: sheetTitle, index: 0 } } }] },
           });
           newSheetId = createResponse.data.replies?.[0]?.addSheet?.properties?.sheetId ?? undefined;
         } catch {
@@ -473,7 +475,7 @@ export class GoogleSheetsService {
       }
 
       // Build all rows
-      const rows: (string | number)[][] = [];
+      const rows: (string | number | boolean)[][] = [];
 
       // Row 1: Workout title
       rows.push([title]);
@@ -485,25 +487,34 @@ export class GoogleSheetsService {
       rows.push([`${dayName} ${monthName} ${day} | Recovery: ${recovery || 'TBD'}`]);
       // Row 3: blank
       rows.push([]);
-      // Row 4: Headers
-      rows.push(['Exercise', 'Set', 'Target', 'Last time', 'Weight', 'Reps', 'Done']);
+      // Row 4: Headers. Weight/Reps come PREFILLED with the plan's targets; Matt
+      // checks Done when he executed as written and only edits numbers on
+      // deviation. (Old 'Target'/'Last time' columns removed — targets ARE the
+      // prefill, and "last time" grounding lives in the progression tools.)
+      rows.push(['Exercise', 'Set', 'Weight', 'Reps', 'Done']);
       // Row 5: blank
       rows.push([]);
 
-      // Exercise rows
+      // Exercise rows — track set-row ranges for the Done-column checkboxes.
+      const checkboxRanges: Array<{ start: number; end: number }> = []; // 0-based row indices
       for (let i = 0; i < exercises.length; i++) {
         const ex = exercises[i];
+        // Prefill Weight numerically where possible ("45 lb" → 45); keep
+        // non-numeric targets ("BW") as-is; leave blank when no target was given
+        // (no-history lift — Matt establishes the baseline).
+        const numeric = ex.targetWeight ? String(ex.targetWeight).replace(/[^0-9.]/g, '') : '';
+        const prefillWeight: string | number = numeric ? Number(numeric) : (ex.targetWeight ?? '');
+        const start = rows.length;
         for (let s = 1; s <= ex.sets; s++) {
           rows.push([
             s === 1 ? ex.name : '',
             s,
-            ex.targetWeight ? String(ex.targetWeight) + (ex.targetReps ? ' × ' + ex.targetReps : '') : '',
-            '-',
-            '',
-            '',
-            '',
+            prefillWeight,
+            ex.targetReps ?? '',
+            false, // unchecked Done checkbox
           ]);
         }
+        checkboxRanges.push({ start, end: rows.length });
         // Blank row between exercises (except after last)
         if (i < exercises.length - 1) {
           rows.push([]);
@@ -517,6 +528,28 @@ export class GoogleSheetsService {
         valueInputOption: 'RAW',
         requestBody: { values: rows },
       });
+
+      // Render the Done column as real checkboxes (per exercise block, so the
+      // separator rows stay clean).
+      if (newSheetId != null && checkboxRanges.length) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: this.SPREADSHEET_ID,
+          requestBody: {
+            requests: checkboxRanges.map((r) => ({
+              setDataValidation: {
+                range: {
+                  sheetId: newSheetId,
+                  startRowIndex: r.start,
+                  endRowIndex: r.end,
+                  startColumnIndex: 4,
+                  endColumnIndex: 5,
+                },
+                rule: { condition: { type: 'BOOLEAN' }, strict: true, showCustomUi: true },
+              },
+            })),
+          },
+        });
+      }
 
       // Bold the title row (row 1) and headers (row 4) using the captured sheet ID
       if (newSheetId != null) {
@@ -548,7 +581,7 @@ export class GoogleSheetsService {
                     startRowIndex: 3,
                     endRowIndex: 4,
                     startColumnIndex: 0,
-                    endColumnIndex: 7,
+                    endColumnIndex: 5,
                   },
                   cell: {
                     userEnteredFormat: {
@@ -854,15 +887,35 @@ export class GoogleSheetsService {
 
       const title = rows[0]?.[0] || '';
       const dateInfo = rows[1]?.[0] || '';
-      // rows[2] blank, rows[3] headers, rows[4] blank
-      const exerciseRows = rows.slice(5);
+
+      // Header-driven column mapping: handles both the current template
+      // (Exercise|Set|Weight|Reps|Done, prefilled targets) and legacy sheets
+      // (Exercise|Set|Target|Last time|Weight|Reps|Done).
+      const headerIdx = rows.findIndex(
+        (r) =>
+          Array.isArray(r) &&
+          r.some((c) => String(c ?? '').trim().toLowerCase() === 'exercise') &&
+          r.some((c) => String(c ?? '').trim().toLowerCase() === 'set')
+      );
+      const header = (headerIdx >= 0 ? rows[headerIdx] : []).map((c: unknown) =>
+        String(c ?? '').trim().toLowerCase()
+      );
+      const col = (name: string) => header.indexOf(name);
+      const ci = {
+        target: col('target'),
+        lastTime: col('last time'),
+        weight: col('weight'),
+        reps: col('reps'),
+        done: col('done'),
+      };
+      const exerciseRows = rows.slice(headerIdx >= 0 ? headerIdx + 1 : 5);
 
       const exercises: WorkoutSheetExercise[] = [];
       let currentExercise: WorkoutSheetExercise | null = null;
 
       for (const row of exerciseRows) {
         // Blank row = separator between exercises
-        if (!row || row.every((cell: string) => !cell || cell.trim() === '')) {
+        if (!row || row.every((cell: unknown) => !cell || String(cell).trim() === '')) {
           if (currentExercise) {
             exercises.push(currentExercise);
             currentExercise = null;
@@ -870,13 +923,14 @@ export class GoogleSheetsService {
           continue;
         }
 
-        const name = row[0]?.trim() || '';
-        const set = parseInt(row[1]) || 0;
-        const target = row[2] || '';
-        const lastTime = row[3] || '';
-        const weight = row[4] || '';
-        const reps = row[5] || '';
-        const done = row[6] || '';
+        const at = (i: number): string => (i >= 0 ? String(row[i] ?? '') : '');
+        const name = String(row[0] ?? '').trim();
+        const set = parseInt(String(row[1] ?? '')) || 0;
+        const target = at(ci.target);
+        const lastTime = at(ci.lastTime);
+        const weight = at(ci.weight);
+        const reps = at(ci.reps);
+        const done = at(ci.done);
 
         if (name) {
           // New exercise

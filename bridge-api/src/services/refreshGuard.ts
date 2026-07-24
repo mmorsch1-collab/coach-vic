@@ -100,6 +100,15 @@ export function isInvalidGrantError(error: any): boolean {
   ) {
     return true;
   }
+  // Any OTHER explicit OAuth error code (invalid_request, invalid_client,
+  // temporarily_unavailable, server_error, …) is a request/client/server
+  // problem — NOT a dead grant. Observed 2026-06-11: WHOOP's half-up gateway
+  // returned 400 {error:"invalid_request"} during a 503 outage and the old
+  // bare-4xx fallback below nuked a perfectly valid refresh token. When the
+  // provider names a non-grant error, keep tokens and retry.
+  if (oauthError !== undefined) {
+    return false;
+  }
 
   // Withings wraps errors in a JSON body even on HTTP 200:
   //   { status: <nonzero>, body: { error: '...' } }
