@@ -200,8 +200,14 @@ export async function ingestWorkout(
     return { added: 0, skipped: 0, exercises: [], prs: [] };
   }
 
-  // DEDUP: skip any exercise that already has a row with the same Date AND Exercise.
-  const existing = new Set<string>();
+  // UPSERT (not skip): map each existing Date+Exercise row to its 1-based sheet
+  // row number. Re-ingesting UPDATES that row with the latest completed sets
+  // instead of skipping it. This is what makes automatic/periodic ingestion safe
+  // — if an early run captures a partial session (e.g. 2 of 4 sets ticked), a
+  // later run corrects the same row to the full set, so no completed set (or PR)
+  // is ever lost. RIR now lives in the feedback store, not this sheet, so
+  // overwriting the legacy RIR column costs nothing.
+  const existingRow = new Map<string, number>();
   {
     const header = (dbRows?.[0] || []).map((h) => String(h ?? '').trim().toLowerCase());
     const di = header.findIndex((h) => h.includes('date'));
@@ -210,24 +216,41 @@ export async function ingestWorkout(
       const row = dbRows[r] || [];
       const rd = String(row[di >= 0 ? di : 0] ?? '').trim();
       const re = String(row[ei >= 0 ? ei : 2] ?? '').trim().toLowerCase();
-      if (rd && re) existing.add(`${rd}::${re}`);
+      if (rd && re) existingRow.set(`${rd}::${re}`, r + 1); // sheet rows are 1-based
     }
   }
 
-  const toAdd = candidates.filter((c) => !existing.has(`${d}::${c.name.toLowerCase()}`));
-  const skipped = candidates.length - toAdd.length;
-  const prs = toAdd.map((c) => c.pr).filter((p): p is string => !!p);
+  const toAppend: typeof candidates = [];
+  const toUpdate: Array<{ rowNum: number; c: (typeof candidates)[number] }> = [];
+  for (const c of candidates) {
+    const rowNum = existingRow.get(`${d}::${c.name.toLowerCase()}`);
+    if (rowNum) toUpdate.push({ rowNum, c });
+    else toAppend.push(c);
+  }
+  // Only NEW exercises can carry a first-time PR (an update re-states an existing
+  // row, so it isn't a fresh PR event).
+  const prs = toAppend.map((c) => c.pr).filter((p): p is string => !!p);
 
-  if (toAdd.length > 0) {
-    await bridge.appendSheet(DB, toAdd.map((c) => c.row));
+  if (toAppend.length > 0) {
+    await bridge.appendSheet(DB, toAppend.map((c) => c.row));
+  }
+  for (const { rowNum, c } of toUpdate) {
+    // Column order is [A..M] = 13 columns; update just this row in place.
+    await bridge.updateSheetRange(DB, `A${rowNum}:M${rowNum}`, [c.row]).catch((err) =>
+      logger.warn({ err, exercise: c.name, rowNum }, 'ingest: row update failed'),
+    );
+  }
+  if (toAppend.length > 0 || toUpdate.length > 0) {
     invalidateSnapshot();
-    // PR lines land in the daily log so the next chat turn / briefing can celebrate.
     for (const pr of prs) {
       await appendDailyLog(todayStr(config.tz), `[pr] New e1RM PR — ${pr}`).catch(() => undefined);
     }
   }
 
-  const exerciseNames = toAdd.map((c) => c.name);
-  logger.info({ date: d, added: toAdd.length, skipped, exercises: exerciseNames, prs }, 'ingestWorkout complete');
-  return { added: toAdd.length, skipped, exercises: exerciseNames, prs };
+  const exerciseNames = toAppend.map((c) => c.name);
+  logger.info(
+    { date: d, added: toAppend.length, updated: toUpdate.length, exercises: exerciseNames, prs },
+    'ingestWorkout complete',
+  );
+  return { added: toAppend.length, skipped: toUpdate.length, exercises: exerciseNames, prs };
 }

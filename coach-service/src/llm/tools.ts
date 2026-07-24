@@ -13,7 +13,7 @@ import { appendEntry, DB_FILES, type DbFile } from '../memory/databases.js';
 import { todayStr, calendarWeek } from '../util/time.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
-import { e1rm, exerciseSeries, parseWorkoutDb, hardSetsInRange, sessionDatesInRange, slopePerWeek, progressionTarget, VOLUME_BANDS, bestE1rmBefore } from '../coaching/metrics.js';
+import { e1rm, exerciseSeries, parseWorkoutDb, hardSetsInRange, sessionDatesInRange, slopePerWeek, progressionTarget, muscleOf, VOLUME_BANDS, bestE1rmBefore } from '../coaching/metrics.js';
 import { invalidateSnapshot } from '../coaching/snapshot.js';
 import { logMeal, PROTEIN_TARGET_G } from '../coaching/nutrition.js';
 import { ingestWorkout, annotateCompletion } from '../coaching/workoutIngest.js';
@@ -80,7 +80,11 @@ export const TOOLS: Anthropic.Tool[] = [
       'return its URL. The sheet PREFILLS Weight/Reps with your targets and adds a Done checkbox ' +
       'per set — Matt just ticks Done when he executes as written, so targets must be REAL ' +
       'numbers grounded in get_exercise_progression (never guessed). For a lift with no history, ' +
-      'OMIT targetWeight (Weight stays blank for Matt to establish the baseline).',
+      'OMIT targetWeight (Weight stays blank for Matt to establish the baseline). ' +
+      'IMPORTANT: the response returns `built_set_counts` and `week_projection` computed from the ' +
+      'exercises you actually created. When you tell Matt the session\'s volume, report THOSE ' +
+      'numbers verbatim — never a remembered plan. (Vic once said "10 leg sets" while building 13; ' +
+      'the sheet is the source of truth, so reconcile against built_set_counts before speaking.)',
     input_schema: {
       type: 'object',
       properties: {
@@ -529,16 +533,44 @@ export async function executeTool(
             timeZone: config.tz,
           }),
         );
-      case 'create_workout':
-        return json(
-          await bridge.createWorkout({
-            date: input.date,
-            title: input.title,
-            // Bridge expects recovery as a string; coerce defensively.
-            recovery: input.recovery != null ? String(input.recovery) : undefined,
-            exercises: input.exercises ?? [],
-          }),
-        );
+      case 'create_workout': {
+        const exs = (input.exercises ?? []) as Array<{ name?: string; sets?: number }>;
+        const result = await bridge.createWorkout({
+          date: input.date,
+          title: input.title,
+          // Bridge expects recovery as a string; coerce defensively.
+          recovery: input.recovery != null ? String(input.recovery) : undefined,
+          exercises: input.exercises ?? [],
+        });
+        // Compute the ACTUAL per-muscle set count of the sheet just built, so the
+        // numbers reported to Matt match what was created. Vic once said "10 leg
+        // sets" while building 13 — this makes that impossible: report THESE.
+        const built: Record<string, number> = {};
+        for (const e of exs) {
+          const mus = muscleOf(String(e.name ?? ''));
+          if (mus === 'warmup') continue;
+          built[mus] = (built[mus] || 0) + (Number(e.sets) || 0);
+        }
+        // Project the week: what's already logged + what this sheet adds.
+        let weekNow: Record<string, number> = {};
+        try {
+          const logs = parseWorkoutDb((await bridge.readSheet('WORKOUT_DATABASE')) as unknown[][]);
+          const wk = calendarWeek(config.tz);
+          weekNow = hardSetsInRange(logs, wk.start, wk.end);
+        } catch { /* projection is best-effort */ }
+        const projection = Object.keys(VOLUME_BANDS).map((mu) => {
+          const add = built[mu] || 0;
+          const proj = (weekNow[mu] || 0) + add;
+          const b = VOLUME_BANDS[mu];
+          return { muscle: mu, this_sheet: add, week_after: proj, mav: b.mav, mrv: b.mrv, status: proj > b.mrv ? 'OVER_MRV' : proj >= b.mav ? 'at_MAV' : `${b.mav - proj}_to_MAV` };
+        });
+        return json({
+          ...result,
+          built_set_counts: built,
+          week_projection: projection,
+          report_rule: 'Report these built_set_counts to Matt — NOT a remembered plan. If a number differs from what you intended, the SHEET is the source of truth; reconcile before telling him anything.',
+        });
+      }
       case 'save_whoop_snapshot':
         return json(await bridge.whoopSnapshot(input));
       case 'get_goals':

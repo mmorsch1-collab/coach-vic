@@ -15,6 +15,7 @@ import { runWeeklyReview } from './weeklyReview.js';
 import { syncBodyComp } from './bodyCompSync.js';
 import { syncWhoopSnapshot } from './whoopSync.js';
 import { runDailyClose } from './dailyClose.js';
+import { ingestWorkout } from '../coaching/workoutIngest.js';
 import { runCostReport } from './costReport.js';
 
 /**
@@ -194,6 +195,12 @@ export function registerJobs(deps: JobDeps): ScheduledTask[] {
     const sent = await runCostReport(deps.deliver);
     if (sent) await costReportState.update((s) => { s.sent = true; });
   }), tzOpt));
+  // Hourly at :05, 7 AM–10 PM — auto-ingest today's filled sheet into
+  // WORKOUT_DATABASE so volume counts stay current WITHOUT Matt or Vic doing
+  // anything (Matt's rule: filling the sheet is his only job). Ingest is now an
+  // UPSERT, so re-running as he ticks more boxes corrects the rows — a partial
+  // early capture never loses a later set. The 11:59 PM close is the backstop.
+  tasks.push(cron.schedule('5 7-22 * * *', guard('auto-ingest', () => ingestWorkout(todayStr(config.tz)).then(() => undefined)), tzOpt));
   // Daily 11:30 PM — log today's WHOOP row into WHOOP_History (silent, deduped).
   // Independent of the morning ritual so the multi-day trend/HRV/strain signals
   // keep working with auto sheet-building off. Late on purpose: recovery is

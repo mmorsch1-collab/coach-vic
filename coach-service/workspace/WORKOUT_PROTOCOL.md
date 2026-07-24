@@ -157,6 +157,12 @@ Rules when he substitutes:
   history gets NO targetWeight (blank Weight; Matt establishes the baseline that day).
 - Row 1 title (e.g., "CHEST — GYM (Recovery 78%)"), row 2 date + WHOOP context, then headers, then exercises.
 - Use the `create_workout` tool; capture the returned sheet URL for the calendar block + message.
+- **Report the volume the tool returns, not your plan.** `create_workout` returns `built_set_counts`
+  and `week_projection` computed from the exercises you actually created. When you tell Matt how many
+  sets a session or muscle has, quote THOSE numbers. Never state a set count from memory — on
+  2026-07-24 a sheet was built with 13 leg sets but communicated as 10 because the plan wasn't
+  reconciled against the sheet. The built sheet is the source of truth; if it doesn't match your
+  intent, fix the sheet or correct your statement before sending anything.
 
 ## Step 6 — Post-workout loop (read + edit the sheet)
 - **Completion contract: a CHECKED Done box = Matt executed that set with the numbers shown.**
