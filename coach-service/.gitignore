@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+.state/
+*.log
+# Daily logs accumulate at runtime; keep the brain files, ignore generated memory
+workspace/memory/*.md

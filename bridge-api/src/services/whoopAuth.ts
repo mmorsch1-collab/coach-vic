@@ -2,6 +2,7 @@ import axios from 'axios';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { tokenStorage, TokenData } from '../storage/tokenStorage.js';
+import { withRefreshLock, isInvalidGrantError, RetryableRefreshError } from './refreshGuard.js';
 
 /**
  * WHOOP OAuth2 service
@@ -101,70 +102,84 @@ export class WhoopAuthService {
   }
 
   /**
-   * Refresh access token using refresh token
-   * If refresh fails, clears tokens and requires re-authentication
+   * Refresh access token using refresh token.
+   *
+   * WHOOP issues SINGLE-USE refresh tokens that rotate on every refresh, so:
+   *  - runs under a per-provider single-flight lock so concurrent callers don't
+   *    each consume the (now rotated) refresh token and race each other;
+   *  - on transient failures (network/timeout/5xx/429) it KEEPS the stored
+   *    tokens and throws a retryable error. It only clears tokens when WHOOP
+   *    explicitly reports an invalid/expired grant.
    */
   async refreshAccessToken(): Promise<TokenData> {
-    const storedToken = await tokenStorage.getWhoopToken();
+    return withRefreshLock('whoop', async () => {
+      const storedToken = await tokenStorage.getWhoopToken();
 
-    if (!storedToken || !storedToken.refreshToken) {
-      logger.warn('No WHOOP refresh token available, clearing tokens');
-      await tokenStorage.deleteWhoopToken();
-      throw new Error('No WHOOP refresh token available. Please re-authenticate via /auth/whoop/start');
-    }
+      if (!storedToken || !storedToken.refreshToken) {
+        logger.warn('No WHOOP refresh token available, clearing tokens');
+        await tokenStorage.deleteWhoopToken();
+        throw new Error(
+          'No WHOOP refresh token available. Please re-authenticate via /auth/whoop/start'
+        );
+      }
 
-    try {
-      logger.info('Refreshing WHOOP access token');
+      try {
+        logger.info('Refreshing WHOOP access token');
 
-      const params = new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: storedToken.refreshToken,
-        client_id: config.whoop.clientId,
-        client_secret: config.whoop.clientSecret,
-      });
+        const params = new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: storedToken.refreshToken,
+          client_id: config.whoop.clientId,
+          client_secret: config.whoop.clientSecret,
+        });
 
-      const response = await axios.post(
-        this.WHOOP_TOKEN_URL,
-        params.toString(),
-        {
+        const response = await axios.post(this.WHOOP_TOKEN_URL, params.toString(), {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
           },
+        });
+
+        const { access_token, refresh_token, expires_in } = response.data;
+
+        if (!access_token) {
+          throw new Error('WHOOP refresh response missing access_token');
         }
-      );
 
-      const { access_token, refresh_token, expires_in } = response.data;
+        const tokenData: TokenData = {
+          accessToken: access_token,
+          refreshToken: refresh_token || storedToken.refreshToken,
+          expiryDate: Date.now() + (expires_in || 3600) * 1000,
+          scope: storedToken.scope,
+          tokenType: 'Bearer',
+        };
 
-      if (!access_token) {
-        throw new Error('WHOOP refresh response missing access_token');
+        await tokenStorage.setWhoopToken(tokenData);
+        logger.info('WHOOP access token refreshed successfully');
+
+        return tokenData;
+      } catch (error: any) {
+        const errorMessage = error.response?.data?.error_description || error.message;
+
+        // Only nuke tokens on a permanent invalid_grant. Transient errors
+        // (network/timeout/5xx/429/rotation race) keep tokens for retry.
+        if (isInvalidGrantError(error)) {
+          logger.error(
+            { err: error.response?.data || error, errorMessage },
+            'WHOOP refresh rejected (invalid_grant), clearing stored tokens'
+          );
+          await tokenStorage.deleteWhoopToken();
+          throw new Error(
+            `WHOOP token refresh failed: ${errorMessage}. Please re-authenticate via /auth/whoop/start`
+          );
+        }
+
+        logger.warn(
+          { err: error.response?.data || error, errorMessage },
+          'WHOOP refresh failed transiently, keeping tokens for retry'
+        );
+        throw new RetryableRefreshError(`WHOOP token refresh failed transiently: ${errorMessage}`);
       }
-
-      const tokenData: TokenData = {
-        accessToken: access_token,
-        refreshToken: refresh_token || storedToken.refreshToken,
-        expiryDate: Date.now() + (expires_in || 3600) * 1000,
-        scope: storedToken.scope,
-        tokenType: 'Bearer',
-      };
-
-      await tokenStorage.setWhoopToken(tokenData);
-      logger.info('WHOOP access token refreshed successfully');
-
-      return tokenData;
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.error_description || error.message;
-      logger.error(
-        { err: error.response?.data || error, errorMessage },
-        'Failed to refresh WHOOP access token, clearing stored tokens'
-      );
-
-      // Clear invalid tokens to force re-authentication
-      await tokenStorage.deleteWhoopToken();
-
-      throw new Error(
-        `WHOOP token refresh failed: ${errorMessage}. Please re-authenticate via /auth/whoop/start`
-      );
-    }
+    });
   }
 
   /**

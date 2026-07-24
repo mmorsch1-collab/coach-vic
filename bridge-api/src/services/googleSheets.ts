@@ -421,25 +421,61 @@ export class GoogleSheetsService {
       const sheets = await this.getSheetsClient();
       const sheetTitle = `Workout_${date}`;
 
-      // Create the new tab and capture the response
-      const createResponse = await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: this.SPREADSHEET_ID,
-        requestBody: {
-          requests: [
-            {
-              addSheet: {
-                properties: { title: sheetTitle },
-              },
-            },
-          ],
-        },
-      });
+      // Idempotent AND gid-stable: if a tab with this name already exists, REUSE it
+      // (clear its contents) rather than delete+recreate. Re-creating assigns a new
+      // gid, which orphans any calendar-event link pointing at #gid=<old>. Reusing
+      // keeps the gid constant so the link stays valid across re-runs (e.g. the 7 AM
+      // fallback or a manual re-trigger).
+      const findId = async (): Promise<number | undefined> => {
+        const meta = await sheets.spreadsheets.get({ spreadsheetId: this.SPREADSHEET_ID });
+        return (
+          meta.data.sheets?.find((s) => s.properties?.title === sheetTitle)?.properties?.sheetId ??
+          undefined
+        );
+      };
 
-      // Extract the new sheet ID from the response
-      const newSheetId = createResponse.data.replies?.[0]?.addSheet?.properties?.sheetId;
+      let newSheetId: number | undefined;
+      let existed = false;
+      try {
+        newSheetId = await findId();
+        existed = newSheetId != null;
+      } catch {
+        newSheetId = undefined;
+      }
+
+      if (newSheetId == null) {
+        try {
+          const createResponse = await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: this.SPREADSHEET_ID,
+            // index 0: today's workout is always the FIRST tab, so opening the
+            // workbook (or a gid-less link) lands on it instead of a random tab.
+            requestBody: { requests: [{ addSheet: { properties: { title: sheetTitle, index: 0 } } }] },
+          });
+          newSheetId = createResponse.data.replies?.[0]?.addSheet?.properties?.sheetId ?? undefined;
+        } catch {
+          // addSheet fails if the tab actually exists (e.g. the lookup above failed
+          // transiently). Fall through to a re-lookup so we reuse rather than crash.
+        }
+        if (newSheetId == null) {
+          // Reply lacked the id, OR the tab already existed — re-fetch to resolve it.
+          newSheetId = await findId();
+          existed = newSheetId != null;
+        }
+      }
+
+      if (newSheetId == null) {
+        throw new Error(`Could not resolve sheetId for ${sheetTitle}`);
+      }
+      if (existed) {
+        // Reuse: clear values (preserves the gid so calendar links stay valid).
+        await sheets.spreadsheets.values.clear({
+          spreadsheetId: this.SPREADSHEET_ID,
+          range: sheetTitle,
+        });
+      }
 
       // Build all rows
-      const rows: (string | number)[][] = [];
+      const rows: (string | number | boolean)[][] = [];
 
       // Row 1: Workout title
       rows.push([title]);
@@ -451,24 +487,34 @@ export class GoogleSheetsService {
       rows.push([`${dayName} ${monthName} ${day} | Recovery: ${recovery || 'TBD'}`]);
       // Row 3: blank
       rows.push([]);
-      // Row 4: Headers
-      rows.push(['Exercise', 'Set', 'Last Time', 'Weight', 'Reps', 'Done']);
+      // Row 4: Headers. Weight/Reps come PREFILLED with the plan's targets; Matt
+      // checks Done when he executed as written and only edits numbers on
+      // deviation. (Old 'Target'/'Last time' columns removed — targets ARE the
+      // prefill, and "last time" grounding lives in the progression tools.)
+      rows.push(['Exercise', 'Set', 'Weight', 'Reps', 'Done']);
       // Row 5: blank
       rows.push([]);
 
-      // Exercise rows
+      // Exercise rows — track set-row ranges for the Done-column checkboxes.
+      const checkboxRanges: Array<{ start: number; end: number }> = []; // 0-based row indices
       for (let i = 0; i < exercises.length; i++) {
         const ex = exercises[i];
+        // Prefill Weight numerically where possible ("45 lb" → 45); keep
+        // non-numeric targets ("BW") as-is; leave blank when no target was given
+        // (no-history lift — Matt establishes the baseline).
+        const numeric = ex.targetWeight ? String(ex.targetWeight).replace(/[^0-9.]/g, '') : '';
+        const prefillWeight: string | number = numeric ? Number(numeric) : (ex.targetWeight ?? '');
+        const start = rows.length;
         for (let s = 1; s <= ex.sets; s++) {
           rows.push([
             s === 1 ? ex.name : '',
             s,
-            '-',
-            ex.targetWeight || '',
-            ex.targetReps || '',
-            '',
+            prefillWeight,
+            ex.targetReps ?? '',
+            false, // unchecked Done checkbox
           ]);
         }
+        checkboxRanges.push({ start, end: rows.length });
         // Blank row between exercises (except after last)
         if (i < exercises.length - 1) {
           rows.push([]);
@@ -482,6 +528,28 @@ export class GoogleSheetsService {
         valueInputOption: 'RAW',
         requestBody: { values: rows },
       });
+
+      // Render the Done column as real checkboxes (per exercise block, so the
+      // separator rows stay clean).
+      if (newSheetId != null && checkboxRanges.length) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: this.SPREADSHEET_ID,
+          requestBody: {
+            requests: checkboxRanges.map((r) => ({
+              setDataValidation: {
+                range: {
+                  sheetId: newSheetId,
+                  startRowIndex: r.start,
+                  endRowIndex: r.end,
+                  startColumnIndex: 4,
+                  endColumnIndex: 5,
+                },
+                rule: { condition: { type: 'BOOLEAN' }, strict: true, showCustomUi: true },
+              },
+            })),
+          },
+        });
+      }
 
       // Bold the title row (row 1) and headers (row 4) using the captured sheet ID
       if (newSheetId != null) {
@@ -513,7 +581,7 @@ export class GoogleSheetsService {
                     startRowIndex: 3,
                     endRowIndex: 4,
                     startColumnIndex: 0,
-                    endColumnIndex: 6,
+                    endColumnIndex: 5,
                   },
                   cell: {
                     userEnteredFormat: {
@@ -805,7 +873,7 @@ export class GoogleSheetsService {
     try {
       const sheets = await this.getSheetsClient();
       const sheetTitle = `Workout_${date}`;
-      const range = `${sheetTitle}!A1:F100`;
+      const range = `${sheetTitle}!A1:G100`;
 
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.SPREADSHEET_ID,
@@ -819,15 +887,35 @@ export class GoogleSheetsService {
 
       const title = rows[0]?.[0] || '';
       const dateInfo = rows[1]?.[0] || '';
-      // rows[2] blank, rows[3] headers, rows[4] blank
-      const exerciseRows = rows.slice(5);
+
+      // Header-driven column mapping: handles both the current template
+      // (Exercise|Set|Weight|Reps|Done, prefilled targets) and legacy sheets
+      // (Exercise|Set|Target|Last time|Weight|Reps|Done).
+      const headerIdx = rows.findIndex(
+        (r) =>
+          Array.isArray(r) &&
+          r.some((c) => String(c ?? '').trim().toLowerCase() === 'exercise') &&
+          r.some((c) => String(c ?? '').trim().toLowerCase() === 'set')
+      );
+      const header = (headerIdx >= 0 ? rows[headerIdx] : []).map((c: unknown) =>
+        String(c ?? '').trim().toLowerCase()
+      );
+      const col = (name: string) => header.indexOf(name);
+      const ci = {
+        target: col('target'),
+        lastTime: col('last time'),
+        weight: col('weight'),
+        reps: col('reps'),
+        done: col('done'),
+      };
+      const exerciseRows = rows.slice(headerIdx >= 0 ? headerIdx + 1 : 5);
 
       const exercises: WorkoutSheetExercise[] = [];
       let currentExercise: WorkoutSheetExercise | null = null;
 
       for (const row of exerciseRows) {
         // Blank row = separator between exercises
-        if (!row || row.every((cell: string) => !cell || cell.trim() === '')) {
+        if (!row || row.every((cell: unknown) => !cell || String(cell).trim() === '')) {
           if (currentExercise) {
             exercises.push(currentExercise);
             currentExercise = null;
@@ -835,12 +923,14 @@ export class GoogleSheetsService {
           continue;
         }
 
-        const name = row[0]?.trim() || '';
-        const set = parseInt(row[1]) || 0;
-        const lastTime = row[2] || '';
-        const weight = row[3] || '';
-        const reps = row[4] || '';
-        const done = row[5] || '';
+        const at = (i: number): string => (i >= 0 ? String(row[i] ?? '') : '');
+        const name = String(row[0] ?? '').trim();
+        const set = parseInt(String(row[1] ?? '')) || 0;
+        const target = at(ci.target);
+        const lastTime = at(ci.lastTime);
+        const weight = at(ci.weight);
+        const reps = at(ci.reps);
+        const done = at(ci.done);
 
         if (name) {
           // New exercise
@@ -849,10 +939,10 @@ export class GoogleSheetsService {
           }
           currentExercise = {
             name,
-            sets: [{ set, lastTime, weight, reps, done }],
+            sets: [{ set, target, lastTime, weight, reps, done }],
           };
         } else if (currentExercise && set > 0) {
-          currentExercise.sets.push({ set, lastTime, weight, reps, done });
+          currentExercise.sets.push({ set, target, lastTime, weight, reps, done });
         }
       }
       if (currentExercise) {
@@ -881,6 +971,7 @@ export interface WorkoutSheetExercise {
   name: string;
   sets: {
     set: number;
+    target: string;
     lastTime: string;
     weight: string;
     reps: string;

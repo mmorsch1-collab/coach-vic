@@ -12,7 +12,16 @@ import { tokenStorage } from '../storage/tokenStorage.js';
  */
 export class TokenRefreshService {
   private intervalId: NodeJS.Timeout | null = null;
+  private bootTimeoutId: NodeJS.Timeout | null = null;
   private readonly REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+  // Small jittered delay before the first refresh after boot. This avoids a
+  // restart (or a briefly-overlapping second instance) firing an immediate
+  // refresh that races with an in-progress rotation and consumes a single-use
+  // refresh token. Each provider's refresh is also single-flight guarded, and
+  // refreshAllTokens() only refreshes tokens actually expiring soon, so the
+  // delayed first run is harmless to freshness.
+  private readonly BOOT_REFRESH_MIN_MS = 60 * 1000; // 1 minute
+  private readonly BOOT_REFRESH_JITTER_MS = 60 * 1000; // + up to 1 minute
 
   /**
    * Start the token refresh service
@@ -28,8 +37,15 @@ export class TokenRefreshService {
       'Starting token refresh service'
     );
 
-    // Run immediately on start
-    this.refreshAllTokens();
+    // Do NOT refresh immediately on start. Instead, schedule the first run after
+    // a short jittered delay (see BOOT_REFRESH_* above) so a restart can't kick
+    // off a refresh that races a rotation already in flight elsewhere.
+    const bootDelay =
+      this.BOOT_REFRESH_MIN_MS + Math.floor(Math.random() * this.BOOT_REFRESH_JITTER_MS);
+    logger.info({ bootDelayMs: bootDelay }, 'Scheduling initial token refresh after jittered delay');
+    this.bootTimeoutId = setTimeout(() => {
+      this.refreshAllTokens();
+    }, bootDelay);
 
     // Then run every 30 minutes
     this.intervalId = setInterval(() => {
@@ -41,6 +57,10 @@ export class TokenRefreshService {
    * Stop the token refresh service
    */
   stop(): void {
+    if (this.bootTimeoutId) {
+      clearTimeout(this.bootTimeoutId);
+      this.bootTimeoutId = null;
+    }
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;

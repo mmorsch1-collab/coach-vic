@@ -2,6 +2,7 @@ import axios from 'axios';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { tokenStorage, TokenData } from '../storage/tokenStorage.js';
+import { withRefreshLock, isInvalidGrantError, RetryableRefreshError } from './refreshGuard.js';
 
 /**
  * Strava OAuth2 service
@@ -98,68 +99,85 @@ export class StravaAuthService {
   }
 
   /**
-   * Refresh access token using refresh token
+   * Refresh access token using refresh token.
+   *
+   * Strava rotates refresh tokens, so:
+   *  - runs under a per-provider single-flight lock so concurrent callers don't
+   *    each consume the (now rotated) refresh token and race each other;
+   *  - on transient failures (network/timeout/5xx/429) it KEEPS the stored
+   *    tokens and throws a retryable error. It only clears tokens when Strava
+   *    explicitly reports an invalid/expired grant.
    */
   async refreshAccessToken(): Promise<TokenData> {
-    const storedToken = await tokenStorage.getStravaToken();
+    return withRefreshLock('strava', async () => {
+      const storedToken = await tokenStorage.getStravaToken();
 
-    if (!storedToken || !storedToken.refreshToken) {
-      logger.warn('No Strava refresh token available, clearing tokens');
-      await tokenStorage.deleteStravaToken();
-      throw new Error(
-        'No Strava refresh token available. Please re-authenticate via /auth/strava/start'
-      );
-    }
-
-    try {
-      logger.info('Refreshing Strava access token');
-
-      const params = {
-        client_id: config.strava.clientId,
-        client_secret: config.strava.clientSecret,
-        grant_type: 'refresh_token',
-        refresh_token: storedToken.refreshToken,
-      };
-
-      const response = await axios.post(this.STRAVA_TOKEN_URL, params, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const { access_token, refresh_token, expires_at } = response.data;
-
-      if (!access_token || !refresh_token) {
-        throw new Error('Strava refresh response missing tokens');
+      if (!storedToken || !storedToken.refreshToken) {
+        logger.warn('No Strava refresh token available, clearing tokens');
+        await tokenStorage.deleteStravaToken();
+        throw new Error(
+          'No Strava refresh token available. Please re-authenticate via /auth/strava/start'
+        );
       }
 
-      const tokenData: TokenData = {
-        accessToken: access_token,
-        refreshToken: refresh_token,
-        expiryDate: expires_at * 1000,
-        scope: storedToken.scope,
-        tokenType: 'Bearer',
-        userId: storedToken.userId,
-      };
+      try {
+        logger.info('Refreshing Strava access token');
 
-      await tokenStorage.setStravaToken(tokenData);
-      logger.info('Strava access token refreshed successfully');
+        const params = {
+          client_id: config.strava.clientId,
+          client_secret: config.strava.clientSecret,
+          grant_type: 'refresh_token',
+          refresh_token: storedToken.refreshToken,
+        };
 
-      return tokenData;
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message;
-      logger.error(
-        { err: error.response?.data || error, errorMessage },
-        'Failed to refresh Strava access token, clearing stored tokens'
-      );
+        const response = await axios.post(this.STRAVA_TOKEN_URL, params, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
 
-      // Clear invalid tokens to force re-authentication
-      await tokenStorage.deleteStravaToken();
+        const { access_token, refresh_token, expires_at } = response.data;
 
-      throw new Error(
-        `Strava token refresh failed: ${errorMessage}. Please re-authenticate via /auth/strava/start`
-      );
-    }
+        if (!access_token || !refresh_token) {
+          throw new Error('Strava refresh response missing tokens');
+        }
+
+        const tokenData: TokenData = {
+          accessToken: access_token,
+          refreshToken: refresh_token,
+          expiryDate: expires_at * 1000,
+          scope: storedToken.scope,
+          tokenType: 'Bearer',
+          userId: storedToken.userId,
+        };
+
+        await tokenStorage.setStravaToken(tokenData);
+        logger.info('Strava access token refreshed successfully');
+
+        return tokenData;
+      } catch (error: any) {
+        const errorMessage = error.response?.data?.message || error.message;
+
+        // Only nuke tokens on a permanent invalid_grant. Transient errors
+        // (network/timeout/5xx/429/rotation race) keep tokens for retry.
+        if (isInvalidGrantError(error)) {
+          logger.error(
+            { err: error.response?.data || error, errorMessage },
+            'Strava refresh rejected (invalid grant), clearing stored tokens'
+          );
+          await tokenStorage.deleteStravaToken();
+          throw new Error(
+            `Strava token refresh failed: ${errorMessage}. Please re-authenticate via /auth/strava/start`
+          );
+        }
+
+        logger.warn(
+          { err: error.response?.data || error, errorMessage },
+          'Strava refresh failed transiently, keeping tokens for retry'
+        );
+        throw new RetryableRefreshError(`Strava token refresh failed transiently: ${errorMessage}`);
+      }
+    });
   }
 
   /**

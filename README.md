@@ -2,6 +2,10 @@
 
 An AI coach that monitors your WHOOP, Withings, and Strava data and reaches out when you need coaching — not when you ask for it.
 
+> **▶ v2 (current architecture, 2026-06):** Coach Vic now runs as a **self-owned service** (`coach-service/`) — a Telegram health-coach powered by Claude (Anthropic API) directly on top of the Bridge API, **replacing OpenClaw**. It adds two-way chat, proactive scheduled coaching, and a computed, history-aware coaching brain (e1RM/progression/volume trends, recovery & body-comp management). See **[docs/COACH_SERVICE_SPEC.md](docs/COACH_SERVICE_SPEC.md)** for the design, **[coach-service/README.md](coach-service/README.md)** to run it, **[coach-service/SWAP.md](coach-service/SWAP.md)** for cutover/rollback, and **[bridge-api/CUTOVER.md](bridge-api/CUTOVER.md)** for the hardened-bridge deploy. The OpenClaw setup below remains as the original reference.
+
+---
+
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)
 

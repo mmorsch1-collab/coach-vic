@@ -66,3 +66,7 @@ my-*.md
 # Google Sheets exports
 sheets-export/
 *.csv
+
+# Claude Code local session state
+.claude/
+coach-service/workspace/*.bak
