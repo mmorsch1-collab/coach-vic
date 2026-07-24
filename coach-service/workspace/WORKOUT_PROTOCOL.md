@@ -26,22 +26,31 @@ Every workout follows this. No shortcuts, no standalone sheets.
 - Hockey on Friday nights (occasional — ask, and keep Friday's session joint-friendly).
 - This is the high-consistency window for the recomposition cut — protect it.
 
-## Weekly split & MAV targets (locked 2026-06-20)
-| Day | Focus | Target Sets |
-|---|---|---|
-| Mon | Chest + Triceps | Chest 10 · Triceps 10 |
-| Tue | Back + Biceps | Back 14 · Biceps 6 |
-| Wed | Shoulders | Shoulders 12 |
-| Thu | Chest 2nd hit + Biceps | Chest 6 · Biceps 6 |
-| Fri | Legs | Legs 10 |
+## Weekly split & MAV targets (rebalanced 2026-07-23)
+| Day | Focus | Target Sets | Day total |
+|---|---|---|---|
+| Mon | Chest + Triceps | Chest 10 · Triceps 8 | 18 |
+| Tue | Back + Biceps | Back 14 · Biceps 6 | 20 |
+| Wed | Shoulders + Core | Shoulders 14 · Core 4 | 18 |
+| Thu | Chest 2nd hit + Biceps + Triceps | Chest 6 · Biceps 6 · Triceps 4 | 16 |
+| Fri | Legs + Core | Legs 10 · Core 4 | 14 |
 
-**Weekly MAV targets:**
-- Chest: 16 sets (MAV 16, MRV 20)
-- Back: 14 sets (MAV 14, MRV 20)
-- Shoulders: 12 sets (MAV 14, MRV 18)
-- Biceps: 12 sets (MAV 12, MRV 16)
-- Triceps: 10 sets (MAV 12, MRV 16)
-- Legs: 10 sets (MAV 10, MRV 14)
+**Weekly totals — every group lands exactly on MAV, no remainders:**
+- Chest: 16 (Mon 10 + Thu 6) = MAV 16 ✓
+- Back: 14 (Tue 14) = MAV 14 ✓
+- Shoulders: 14 (Wed 14) = MAV 14 ✓
+- Biceps: 12 (Tue 6 + Thu 6) = MAV 12 ✓
+- Triceps: 12 (Mon 8 + Thu 4) = MAV 12 ✓
+- Legs: 10 (Fri 10) = MAV 10 ✓
+- Core: 8 (Wed 4 + Fri 4) = MAV 8 ✓
+
+> **Why this changed (2026-07-23).** The previous split silently missed MAV on three
+> groups — triceps 10 vs MAV 12, shoulders 12 vs MAV 14, and **core 0 vs MAV 8** (core
+> wasn't in the split at all, despite the Core Programming section below assigning it to
+> Wed + Fri). Under the "hit MAV every week" mandate that is a Rule 7 planning error, so
+> the split now sums to MAV for every group. Daily load is 14–20 sets (Rule 2), and every
+> placement is a block of ≥4 sets (Rule 7's minimum meaningful block) — no orphaned 1–2
+> set remainders bolted onto Friday.
 
 **Volume autoregulation:** Matt provides fatigue feedback — dial back only when he reports it,
 not based on WHOOP color alone. He's running full tilt for 3 weeks; trust the feedback loop.

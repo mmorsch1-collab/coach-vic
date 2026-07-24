@@ -6,6 +6,8 @@ import {
   strainPattern,
   regressingLifts,
   muscleRetentionAlarm,
+  muscleOf,
+  VOLUME_BANDS,
   type SetLog,
   type WhoopRow,
 } from '../src/coaching/metrics.js';
@@ -222,5 +224,80 @@ describe('regressingLifts', () => {
   it('treats one off session as noise', () => {
     const dip = [s('2026-07-06', 130), s('2026-07-13', 120), s('2026-07-20', 140)];
     expect(regressingLifts(dip, ['Bench Press'])).toEqual([]);
+  });
+});
+
+// ---- Exercise → muscle mapping ----
+// Every case below is a REAL exercise name from WORKOUT_DATABASE that was
+// previously misfiled. These are regression locks, not hypotheticals.
+describe('muscleOf', () => {
+  const cases: Array<[string, string]> = [
+    // Was chest via `incline (db|…)` — 6 sessions of arm work as chest volume.
+    ['Incline DB Curl', 'biceps'],
+    ['Incline DB Curls', 'biceps'],
+    // Was chest via `dip`.
+    ['Tricep Dip', 'triceps'],
+    // Was shoulders via `overhead`.
+    ['Overhead Cable Tricep Extension', 'triceps'],
+    ['Overhead Tricep Extension (cable or EZ-bar)', 'triceps'],
+    // Was back via bare `chin` matching ma-CHIN-e.
+    ['Ab Crunch machine', 'core'],
+    ['Machine Fly', 'chest'],
+    // Fell through to 'other' and vanished from every count.
+    ['Face Pull', 'shoulders'],
+    ['Flat DB Press', 'chest'],
+    ['Hanging Leg Raise', 'core'],
+    ['Pallof Press', 'core'],
+    ['DB Pullovers', 'back'],
+    ['Outer Thigh Machine', 'legs'],
+    // Ordering guards that must not regress.
+    ['Leg Curl', 'legs'],
+    ['Calf Raise', 'legs'],
+    ['DB Lateral Raise', 'shoulders'],
+    ['Overhead Press', 'shoulders'],
+    ['Incline DB Press (KEY LIFT)', 'chest'],
+    ['Romanian Deadlift', 'legs'],
+    ['Lat Pulldown', 'back'],
+  ];
+  for (const [name, want] of cases) {
+    it(`${name} -> ${want}`, () => expect(muscleOf(name)).toBe(want));
+  }
+
+  it('classifies warm-up / ramp / prehab rows as warmup', () => {
+    for (const w of [
+      'Warm-Up: Quadruped Hip CARs',
+      'Warm-Up: Plank Rocks',
+      'Prone Press-Ups',
+      'DB Shoulder Press Ramp 1',
+      'Chin Retractions',
+    ]) {
+      expect(muscleOf(w)).toBe('warmup');
+    }
+  });
+
+  it('never counts warm-up rows as hard sets', () => {
+    const logs: SetLog[] = [
+      { date: '2026-07-24', session: '', exercise: 'Warm-Up: Plank Rocks', weight: 0, reps: [10, 10] },
+      { date: '2026-07-24', session: '', exercise: 'Hanging Leg Raise', weight: 0, reps: [12, 12] },
+    ];
+    const hs = hardSetsInRange(logs, '2026-07-20', '2026-07-26');
+    expect(hs.core).toBe(2); // only the real work
+    expect(hs.warmup).toBeUndefined();
+  });
+});
+
+describe('VOLUME_BANDS matches WORKOUT_PROTOCOL.md', () => {
+  // The locked "Weekly MAV Targets" table. Code and doc drifted apart once
+  // (back MAV 16 vs 14, chest MEV 10 vs 8, core MEV 0 vs 4) — lock them.
+  it('bands equal the protocol table', () => {
+    expect(VOLUME_BANDS).toEqual({
+      chest: { mev: 8, mav: 16, mrv: 20 },
+      back: { mev: 10, mav: 14, mrv: 20 },
+      shoulders: { mev: 8, mav: 14, mrv: 18 },
+      biceps: { mev: 6, mav: 12, mrv: 16 },
+      triceps: { mev: 6, mav: 12, mrv: 16 },
+      legs: { mev: 6, mav: 10, mrv: 14 },
+      core: { mev: 4, mav: 8, mrv: 12 },
+    });
   });
 });

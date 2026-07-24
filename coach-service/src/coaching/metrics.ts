@@ -19,19 +19,50 @@ export function e1rm(weight: number, reps: number): number {
   return weight * (36 / (37 - r));
 }
 
-// ---- exercise → muscle map (keyword based; ORDER MATTERS — most specific first,
-// and legs/chest are matched BEFORE the generic "press" terms so "leg press" and
-// "chest press" aren't miscounted as shoulders). ----
+/**
+ * Warm-up / ramp / prehab rows. These are logged in the sheet like any other
+ * exercise but are NOT hard sets, and the protocol is explicit that the Friday
+ * PT work is prehab and "not counted toward core MAV sets". Counting them
+ * inflates weekly volume and, worse, makes a muscle look trained when it only
+ * got mobility work.
+ */
+const WARMUP_RE =
+  /^warm[-\s]?up\b|^ramp\b|\bramp\s*\d+\s*$|prehab|\bcars\b|quadruped|prone\s?press.?ups?|plank\s?rocks|tsp\s?rotation|chin\s?retraction/i;
+
+export function isWarmup(exercise: string): boolean {
+  return WARMUP_RE.test(exercise.trim());
+}
+
+/**
+ * exercise → muscle map (keyword based). ORDER IS LOAD-BEARING; each rule below
+ * exists because a real logged exercise name was landing in the wrong bucket:
+ *
+ *  - core BEFORE back: "Ab Crunch machine" matched back's old bare `chin`
+ *    pattern via ma-CHIN-e. (That bare `chin` is now `chin.?up`.)
+ *  - triceps BEFORE chest: "Tricep Dip" was chest via `dip`.
+ *  - triceps BEFORE shoulders: "Overhead Cable Tricep Extension" was shoulders
+ *    via `overhead`.
+ *  - legs BEFORE biceps: "Leg Curl" must not match `curl`.
+ *  - biceps BEFORE chest: "Incline DB Curl" was chest via `incline (db|…)` —
+ *    six sessions of arm work counted as chest volume.
+ *  - chest must match FLAT/decline presses too, not just incline: "Flat DB
+ *    Press" was falling through to 'other' and vanishing from the count.
+ *  - shoulders owns `face pull` (rear delt); it was falling through to 'other'
+ *    across 10 sessions.
+ */
 const MUSCLE_RULES: Array<[RegExp, string]> = [
-  [/squat|lunge|leg\s?press|leg\s?ext|leg\s?curl|hamstring|quad|calf|rdl|romanian|glute/i, 'legs'],
-  [/bench|chest|pec|fly|flye|dip|push.?up|incline\s?(db|dumbbell|barbell|press)/i, 'chest'],
-  [/row|pull.?up|pull.?down|lat\s?pull|chin|deadlift|\bback\b/i, 'back'],
-  [/shoulder|ohp|overhead|lateral|delt|military|arnold/i, 'shoulders'],
+  [/pallof|ab\s?wheel|dead\s?bug|hollow|russian\s?twist|(leg|knee)\s?raise|crunch|plank|sit.?up|\babs?\b|core|farmer/i, 'core'],
+  [/tricep|pushdown|push\s?down|skull|kickback|(overhead|french).*(ext|extension)/i, 'triceps'],
+  [/squat|lunge|leg\s?press|leg\s?ext|leg\s?curl|hamstring|quad|calf|rdl|romanian|glute|hip\s?thrust|thigh|abduct|adduct/i, 'legs'],
   [/curl|bicep/i, 'biceps'],
-  [/tricep|pushdown|skull/i, 'triceps'],
-  [/\bab\b|abs|core|plank|crunch|sit.?up/i, 'core'],
+  [/bench|chest|pec|\bfly|flye|\bdip|push.?up|(incline|flat|decline).*(press|bench|fly)|incline\s?(db|dumbbell|barbell)\s*$/i, 'chest'],
+  [/row|pull.?up|pull.?down|lat\s?pull|chin.?up|deadlift|\bback\b|shrug|pullover/i, 'back'],
+  [/shoulder|ohp|overhead|lateral|delt|military|arnold|face.?pull|upright/i, 'shoulders'],
 ];
+
+/** Muscle group for an exercise; 'warmup' for prehab/ramp rows (never counted). */
 export function muscleOf(exercise: string): string {
+  if (isWarmup(exercise)) return 'warmup';
   for (const [re, m] of MUSCLE_RULES) if (re.test(exercise)) return m;
   return 'other';
 }
@@ -156,6 +187,7 @@ export function weeklyHardSets(logs: SetLog[], days = 7): Record<string, number>
     const hard = l.reps.filter((r) => r >= 5).length;
     if (!hard) continue;
     const m = muscleOf(l.exercise);
+    if (m === 'warmup') continue; // prehab/ramp rows are not hard sets
     counts[m] = (counts[m] || 0) + hard;
   }
   return counts;
@@ -178,6 +210,7 @@ export function hardSetsInRange(logs: SetLog[], start: string, end: string): Rec
     const hard = l.reps.filter((r) => r >= 5).length;
     if (!hard) continue;
     const m = muscleOf(l.exercise);
+    if (m === 'warmup') continue; // prehab/ramp rows are not hard sets
     counts[m] = (counts[m] || 0) + hard;
   }
   return counts;
@@ -333,14 +366,21 @@ export function muscleRetentionAlarm(i: RetentionInputs): { firing: boolean; met
   return { firing: missing.length === 0, met, missing };
 }
 
-/** Volume-landmark bands (hard sets/week). Bias: chest/upper priority,
- * legs maintenance (already developed), low-responder-in-deficit ranges. */
+/**
+ * Volume-landmark bands (hard sets/week).
+ *
+ * MUST stay in sync with the "Weekly MAV Targets" table in WORKOUT_PROTOCOL.md —
+ * that table is the locked training standard and this is what the snapshot and
+ * get_muscle_volume actually report against. They had drifted apart (back MAV
+ * 16 here vs 14 in the doc; chest MEV 10 vs 8; core MEV 0 vs 4), so Vic was
+ * chasing targets Matt's own protocol didn't set. Change both together.
+ */
 export const VOLUME_BANDS: Record<string, { mev: number; mav: number; mrv: number }> = {
-  chest: { mev: 10, mav: 16, mrv: 20 },
-  back: { mev: 10, mav: 16, mrv: 20 },
+  chest: { mev: 8, mav: 16, mrv: 20 },
+  back: { mev: 10, mav: 14, mrv: 20 },
   shoulders: { mev: 8, mav: 14, mrv: 18 },
   biceps: { mev: 6, mav: 12, mrv: 16 },
   triceps: { mev: 6, mav: 12, mrv: 16 },
   legs: { mev: 6, mav: 10, mrv: 14 }, // maintenance — bank recovery for upper
-  core: { mev: 0, mav: 8, mrv: 12 },
+  core: { mev: 4, mav: 8, mrv: 12 },
 };

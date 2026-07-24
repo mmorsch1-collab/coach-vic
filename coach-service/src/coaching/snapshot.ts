@@ -19,7 +19,7 @@ import {
   type WhoopRow,
 } from './metrics.js';
 import { todayProteinLine, proteinTrendLine } from './nutrition.js';
-import { calendarWeek, weekdayLabel, hourOfTimestamp, todayStr, hourInTz } from '../util/time.js';
+import { calendarWeek, weekdayLabel, hourOfTimestamp, todayStr, hourInTz, addDaysStr } from '../util/time.js';
 
 /**
  * The always-loaded coaching SNAPSHOT — a compact digest of Matt's current
@@ -113,15 +113,21 @@ export async function buildSnapshot(): Promise<string> {
     const volLine = Object.keys(VOLUME_BANDS).map((m) => {
       const n = hs[m] || 0;
       const b = VOLUME_BANDS[m];
-      const flag = n < b.mev ? '⚠low' : n > b.mrv ? '⚠high' : 'ok';
+      // The mandate is to LAND on MAV, so "how many sets left" is the useful
+      // signal — and hitting MRV is a ceiling to stop at, not a quiet "ok".
+      const flag =
+        n > b.mrv ? '⚠OVER MRV' : n >= b.mrv ? '⚠at MRV — stop' : n >= b.mav ? '✓MAV' : `+${b.mav - n}`;
       return `${m} ${n}/${b.mav}(${flag})`;
     });
-    lines.push(`Hard sets THIS CALENDAR WEEK vs MAV: ${volLine.join(', ')}`);
+    lines.push(
+      `Hard sets THIS CALENDAR WEEK vs MAV (+N = sets still to place this week): ${volLine.join(', ')}`,
+    );
 
     // Days since each muscle trained.
     const lastByMuscle: Record<string, string> = {};
     logs.forEach((l) => {
       const m = muscleOf(l.exercise);
+      if (m === 'warmup') return; // mobility work is not "training that muscle"
       if (!lastByMuscle[m] || l.date > lastByMuscle[m]) lastByMuscle[m] = l.date;
     });
     lines.push(
@@ -188,7 +194,14 @@ export async function buildSnapshot(): Promise<string> {
     const updatedAt = meta?.updated_at;
     const ageH = updatedAt ? (Date.now() - Date.parse(updatedAt)) / 3_600_000 : NaN;
     const whoopDate = whoopToday?.data?.date;
-    const isToday = !/^\d{4}-\d{2}-\d{2}$/.test(String(whoopDate)) || whoopDate === todayStr(config.tz);
+    // WHOOP anchors its cycle date to UTC, so after ~8pm ET its "date" is
+    // already tomorrow's while our local date is still today. A strict equality
+    // check therefore blanked recovery coaching every evening. Accept ±1 day and
+    // let the SCORED + freshness checks do the real work of rejecting stale data.
+    const localToday = todayStr(config.tz);
+    const isToday =
+      !/^\d{4}-\d{2}-\d{2}$/.test(String(whoopDate)) ||
+      [localToday, addDaysStr(localToday, 1), addDaysStr(localToday, -1)].includes(String(whoopDate));
     const workoutHour = Number(config.workoutTime.split(':')[0]);
     const inBriefingWindow = hourInTz(config.tz) <= workoutHour + 2;
     const freshEnough = inBriefingWindow ? Number.isFinite(ageH) && ageH <= 2 : true;
@@ -197,10 +210,12 @@ export async function buildSnapshot(): Promise<string> {
     if (usable) {
       const d = whoopToday!.data;
       const age = Number.isFinite(ageH) ? `${ageH.toFixed(1)}h old` : 'age unknown';
+      const r1 = (v: number | null | undefined) =>
+        v == null || !Number.isFinite(v) ? '?' : String(Math.round(v * 10) / 10);
       lines.push(
         `WHOOP today (SCORED, ${age}): recovery ${whoopToday!.recovery ?? '?'}% (${whoopToday!.color}), ` +
-          `HRV ${d?.recovery?.hrv ?? '?'}ms, RHR ${d?.recovery?.restingHeartRate ?? '?'}, ` +
-          `sleep ${d?.sleep?.durationHours ?? '?'}h, strain ${whoopToday!.strain ?? '?'}.`,
+          `HRV ${r1(d?.recovery?.hrv)}ms, RHR ${r1(d?.recovery?.restingHeartRate)}, ` +
+          `sleep ${r1(d?.sleep?.durationHours)}h, strain ${r1(whoopToday!.strain)}.`,
       );
     } else if (!whoopToday?.ok && !whoopToday?.authError) {
       // TRANSIENT fetch failure (WHOOP token refresh 502s are common and

@@ -20,10 +20,31 @@ import { inQuietHours } from './proactiveState.js';
 
 interface HealState {
   lastAlertMsByKey: Record<string, number>;
+  /** Consecutive non-auth ("transient") probe failures per provider. */
+  transientStreakByKey?: Record<string, number>;
 }
-const store = new JsonStore<HealState>('self-heal-state.json', { lastAlertMsByKey: {} });
+const store = new JsonStore<HealState>('self-heal-state.json', {
+  lastAlertMsByKey: {},
+  transientStreakByKey: {},
+});
 
 const ALERT_COOLDOWN_MIN = 24 * 60; // one alert per issue per day
+
+/**
+ * How many consecutive "transient" failures before we stop believing it.
+ * The probe runs hourly, so 3 ≈ 3 hours of a provider being continuously
+ * unusable — well past any real blip.
+ *
+ * This exists because of a genuine silent outage on 2026-07-23: WHOOP's refresh
+ * returned OAuth `invalid_request`, which the Bridge classifies as retryable
+ * (deliberately — a 2026-06-11 incident showed WHOOP emits it during outages,
+ * and treating it as a dead grant wiped a valid token). But nothing ever
+ * escalated when it did NOT clear, so WHOOP was dead for ~12h, every hourly
+ * probe logged "transient probe failure (ignored)", and Matt was never told.
+ * Re-auth was the actual fix. A failure that never recovers is not transient,
+ * whatever its error code says.
+ */
+const TRANSIENT_STREAK_ALERT = 3;
 
 const PROVIDERS: Array<{ name: string; key: string; probe: () => Promise<unknown> }> = [
   { name: 'WHOOP', key: 'whoop', probe: () => bridge.whoopToday() },
@@ -75,9 +96,10 @@ export async function runSelfHeal(deliver: (text: string) => Promise<void>): Pro
   for (const p of PROVIDERS) {
     try {
       await p.probe();
-      // success → clear any prior alert state so a future break re-alerts immediately
+      // success → clear alert state AND the streak so a future break re-alerts immediately
       await store.update((s) => {
         delete s.lastAlertMsByKey[p.key];
+        if (s.transientStreakByKey) delete s.transientStreakByKey[p.key];
       });
     } catch (err) {
       if (isAuthError(err)) {
@@ -88,9 +110,29 @@ export async function runSelfHeal(deliver: (text: string) => Promise<void>): Pro
           `⚠️ ${p.name} disconnected. Reconnect in ~30 seconds:\n${authUrl(p.key)}\n` +
             `Until then I'll coach with whatever data I still have.`,
         );
+        continue; // NOT return — the remaining providers still need probing
+      }
+      // Non-auth failure. Count it — a "transient" error that never clears is
+      // an outage, and staying silent about it is how WHOOP died unnoticed.
+      let streak = 0;
+      await store.update((s) => {
+        s.transientStreakByKey = s.transientStreakByKey ?? {};
+        streak = (s.transientStreakByKey[p.key] ?? 0) + 1;
+        s.transientStreakByKey[p.key] = streak;
+      });
+      const msg = (err as Error).message;
+      if (streak >= TRANSIENT_STREAK_ALERT) {
+        logger.error({ provider: p.key, streak, err: msg }, 'Self-heal: persistent failure, escalating');
+        await alertOnce(
+          deliver,
+          p.key,
+          `⚠️ ${p.name} has been failing for ${streak} straight checks — it reports a retryable ` +
+            `error but it is not recovering, which usually means the connection needs renewing:\n` +
+            `${authUrl(p.key)}\n` +
+            `Until it's back I won't use ${p.name} data rather than coach off stale numbers.`,
+        );
       } else {
-        // transient (network/5xx/rate-limit) — not an auth problem; don't alert.
-        logger.info({ provider: p.key, err: (err as Error).message }, 'Self-heal: transient probe failure (ignored)');
+        logger.info({ provider: p.key, streak, err: msg }, 'Self-heal: transient probe failure');
       }
     }
   }
