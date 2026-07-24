@@ -27,7 +27,7 @@ export function e1rm(weight: number, reps: number): number {
  * got mobility work.
  */
 const WARMUP_RE =
-  /^warm[-\s]?up\b|^ramp\b|\bramp\s*\d+\s*$|prehab|\bcars\b|quadruped|prone\s?press.?ups?|plank\s?rocks|tsp\s?rotation|chin\s?retraction/i;
+  /^warm[-\s]?up\b|^ramp\b|\bramp\s*\d+\s*$|prehab|\bcars?\b|quadruped|prone\s?press.?ups?|plank\s?rocks?|tsp\s?rotation|chin\s?retraction/i;
 
 export function isWarmup(exercise: string): boolean {
   return WARMUP_RE.test(exercise.trim());
