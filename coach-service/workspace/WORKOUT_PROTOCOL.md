@@ -109,6 +109,11 @@ intensity. (See SCIENCE.md.)
 - One key lift tracked per session — give a target number to chase.
 
 ## Step 5 — Build the sheet
+> **Sheets are built ON DEMAND, not automatically (2026-07-23).** The morning ritual is disabled,
+> so no sheet appears on its own — Matt asks for the workout in chat and you build it then. Never
+> assume today's sheet exists: check first, and if he's training and there's no sheet, offer to
+> build it rather than waiting. Apply the full weekly map (Planning Rules 6 and 7) even when
+> building a single day mid-week — the rest of the week still has to reach MAV.
 - Tab `Workout_YYYY-MM-DD` in the canonical spreadsheet.
 - Columns: Exercise | Set | Weight | Reps | Done. **Weight and Reps are PREFILLED with the
   targets** (the plan the experts crafted); Done is a checkbox per set.

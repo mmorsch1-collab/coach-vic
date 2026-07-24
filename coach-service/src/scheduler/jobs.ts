@@ -13,6 +13,7 @@ import { runSelfHeal } from './selfHeal.js';
 import { runMaintenanceReport } from './maintenance.js';
 import { runWeeklyReview } from './weeklyReview.js';
 import { syncBodyComp } from './bodyCompSync.js';
+import { syncWhoopSnapshot } from './whoopSync.js';
 import { runDailyClose } from './dailyClose.js';
 import { runCostReport } from './costReport.js';
 
@@ -193,6 +194,12 @@ export function registerJobs(deps: JobDeps): ScheduledTask[] {
     const sent = await runCostReport(deps.deliver);
     if (sent) await costReportState.update((s) => { s.sent = true; });
   }), tzOpt));
+  // Daily 11:30 PM — log today's WHOOP row into WHOOP_History (silent, deduped).
+  // Independent of the morning ritual so the multi-day trend/HRV/strain signals
+  // keep working with auto sheet-building off. Late on purpose: recovery is
+  // scored once at wake and holds all day, but strain needs the full day to be
+  // meaningful. Runs before the 11:59 PM daily close.
+  tasks.push(cron.schedule('30 23 * * *', guard('whoop-sync-23:30', () => syncWhoopSnapshot().then(() => undefined)), tzOpt));
   // Daily 6:00 AM — sync latest Withings reading into BODY_COMPOSITION (silent).
   tasks.push(cron.schedule('0 6 * * *', guard('bodycomp-sync', () => syncBodyComp().then(() => undefined)), tzOpt));
   // Daily 3:30 AM — memory curation.
