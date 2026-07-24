@@ -18,6 +18,7 @@ import { invalidateSnapshot } from '../coaching/snapshot.js';
 import { logMeal, PROTEIN_TARGET_G } from '../coaching/nutrition.js';
 import { ingestWorkout, annotateCompletion } from '../coaching/workoutIngest.js';
 import { classifyExercise } from '../coaching/exerciseClassification.js';
+import { logFeedback } from '../coaching/feedback.js';
 
 /**
  * Tools Coach Vic can call. Bridge tools = read/write health data; memory tools =
@@ -338,6 +339,37 @@ export const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: 'object', properties: {} },
   },
   {
+    name: 'log_workout_feedback',
+    description:
+      'Record post-workout subjective feedback for ONE exercise, so it drives coaching. Capture ' +
+      'during the feel/effort debrief — one light pass over the session\'s main lifts. Every field ' +
+      'is optional except exercise; log what Matt gives, don\'t interrogate. Each signal is used: ' +
+      '• rir (key lift, last set) gates whether load advances next session. ' +
+      '• mmc (mind-muscle connection) drives exercise SELECTION — and you MUST capture WEAK/NONE ' +
+      'too, not just good ones: an exercise Matt feels nothing in over 2+ sessions gets flagged to ' +
+      'replace. Always ask how the connection felt, including "did anything feel like it did nothing?" ' +
+      '• pain (area + severity) drives substitution and load backoff, especially the finicky lower ' +
+      'back / left hip (see USER.md) — log any tweak even if mild. Re-calling for the same ' +
+      'exercise+date merges (updates), so it\'s safe to add fields as Matt mentions them.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        exercise: { type: 'string', description: 'Exact exercise name as logged.' },
+        date: { type: 'string', description: 'YYYY-MM-DD; defaults to today.' },
+        rir: { type: 'number', description: 'Reps in reserve on the last/hardest set (0–4).' },
+        mmc: {
+          type: 'string',
+          enum: ['strong', 'moderate', 'weak', 'none'],
+          description: 'Mind-muscle connection. "none"/"weak" = felt little/nothing in the target muscle → replacement candidate.',
+        },
+        pain_area: { type: 'string', description: 'Body area that felt off, e.g. "lower back", "left hip", "left knee". Omit if none.' },
+        pain_severity: { type: 'string', enum: ['mild', 'moderate', 'sharp'], description: 'How bad the tweak felt.' },
+        note: { type: 'string', description: 'Any short qualitative detail worth keeping.' },
+      },
+      required: ['exercise'],
+    },
+  },
+  {
     name: 'classify_exercise',
     description:
       'Record which muscle group an exercise trains, so its sets count toward weekly volume. ' +
@@ -653,6 +685,25 @@ export async function executeTool(
             'snapshot ingest warning and call ingest_workout first.',
           muscles,
         });
+      }
+      case 'log_workout_feedback': {
+        const saved = await logFeedback({
+          exercise: input.exercise,
+          date: input.date,
+          rir: input.rir,
+          mmc: input.mmc,
+          painArea: input.pain_area,
+          painSeverity: input.pain_severity,
+          note: input.note,
+        });
+        if (!saved) return ok('Could not log feedback — an exercise name is required.');
+        invalidateSnapshot();
+        const bits = [
+          saved.rir != null ? `RIR ${saved.rir}` : null,
+          saved.mmc ? `MMC ${saved.mmc}` : null,
+          saved.painArea ? `pain: ${saved.painArea}${saved.painSeverity ? ` (${saved.painSeverity})` : ''}` : null,
+        ].filter(Boolean);
+        return ok(`Logged feedback for ${saved.exercise}${bits.length ? ` — ${bits.join(', ')}` : ''}.`);
       }
       case 'classify_exercise': {
         const saved = await classifyExercise(input.exercise, input.muscle);

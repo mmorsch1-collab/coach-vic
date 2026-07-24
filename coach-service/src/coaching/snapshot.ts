@@ -20,6 +20,7 @@ import {
   type WhoopRow,
 } from './metrics.js';
 import { todayProteinLine, proteinTrendLine } from './nutrition.js';
+import { allFeedback, recentPain, summarizeMmc } from './feedback.js';
 import { calendarWeek, weekdayLabel, hourOfTimestamp, todayStr, hourInTz, addDaysStr } from '../util/time.js';
 
 /**
@@ -418,6 +419,37 @@ export async function buildSnapshot(): Promise<string> {
           `missing [${alarm.missing.join('; ')}]. Do NOT tell Matt he is losing muscle on a partial signal.`,
       );
     }
+  }
+
+  // ---- Workout feedback (RIR / mind-muscle / pain) — each drives a decision ----
+  try {
+    const fb = await allFeedback();
+    // Pain: recent tweaks → caution + substitution (esp. back/hip, see USER.md).
+    const pain = recentPain(fb, 21);
+    if (pain.length) {
+      const top = pain.slice(0, 4).map((p) => `${p.area}${p.severity !== 'mild' ? ` (${p.severity})` : ''} — ${p.exercise} ${p.date}`);
+      lines.push(
+        `⚠ Recent pain/tweaks (last 21d): ${top.join('; ')}. Factor into exercise selection and ` +
+          `load — prefer the spine/joint-friendly variant, back off load (keep sets), and check in ` +
+          `on how it's feeling before loading that pattern again.`,
+      );
+    }
+    // Mind-muscle: exercises that give little/no connection → replacement candidates.
+    const mmc = summarizeMmc(fb, 42);
+    const replace = mmc.filter((s) => s.replaceCandidate);
+    if (replace.length) {
+      lines.push(
+        `Low mind-muscle (${replace.length}) — propose swaps: ` +
+          replace.map((s) => `${s.exercise} (weak/none ×${s.weakOrNone})`).join(', ') +
+          `. Matt feels little in these; suggest a better-connecting variant for the same muscle.`,
+      );
+    }
+    const keep = mmc.filter((s) => s.strong >= 2 && !s.replaceCandidate).slice(0, 4);
+    if (keep.length) {
+      lines.push(`Strong mind-muscle (bias toward these): ${keep.map((s) => s.exercise).join(', ')}.`);
+    }
+  } catch {
+    /* feedback is best-effort */
   }
 
   // ---- Goals ----

@@ -18,6 +18,15 @@ export function yesterdayStr(tz: string): string {
   return todayStr(tz, new Date(Date.now() - 24 * 60 * 60 * 1000));
 }
 
+/** Whole days from `date` to `ref` (both "YYYY-MM-DD"); negative if date is after ref.
+ *  Anchored at UTC noon so it's DST- and tz-independent. */
+export function daysBetween(date: string, ref: string): number {
+  const a = Date.parse(`${date}T12:00:00Z`);
+  const b = Date.parse(`${ref}T12:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return NaN;
+  return Math.round((b - a) / 86400000);
+}
+
 /** "YYYY-MM-DD" + n days (n may be negative). Anchored at noon to dodge DST edges. */
 export function addDaysStr(date: string, n: number): string {
   const t = Date.parse(`${date}T12:00:00Z`);

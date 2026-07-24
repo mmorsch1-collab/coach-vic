@@ -171,9 +171,21 @@ Rules when he substitutes:
   [your best-guess muscle]?" — and call `classify_exercise` with his answer. This persists and
   applies to all past + future logs of that exercise, so it's a one-time fix. Never let a novel
   exercise sit unclassified; that's how volume silently under-counts.
-- **RIR capture — ask exactly ONE number** after ingesting: "Last set of [key lift] — how many
-  reps left in the tank?" Log it via `update_sheet_range` to that exercise's RIR cell in
-  WORKOUT_DATABASE. Reps exactly equal to the prefilled target = UNVERIFIED effort (he stops at
+- **Feedback debrief — capture via `log_workout_feedback` (this is the systematic loop).** After
+  ingesting, run ONE light pass — not an interrogation (Matt dislikes granular tracking). Each
+  signal is wired to a decision, so only ask what gets used:
+  - **RIR** on the key lift: "Last set of [key lift] — reps left in the tank?" → gates whether load
+    advances next session.
+  - **Mind-muscle**, asked GENERALLY across the session's main lifts, capturing the duds too:
+    "Which felt like they hit — and did any feel like they did nothing?" Log `mmc` per exercise
+    (strong / moderate / weak / none). Weak/none over 2+ sessions flags that exercise to REPLACE —
+    that's the point of capturing poor connection, not just good.
+  - **Pain/tweaks:** "Anything cranky — back, hip, joints?" Log `pain_area` + severity for any
+    tweak, even mild (the lower back / left hip is finicky — see USER.md). Drives substitution and
+    load backoff.
+  Log only what he volunteers; re-calling the tool merges, so add fields as he mentions them. The
+  snapshot surfaces recent pain, replacement candidates, and strong-connection lifts back to you —
+  so this feedback actually changes the plan and exercise selection, it doesn't just get stored. Reps exactly equal to the prefilled target = UNVERIFIED effort (he stops at
   the number); only the AMRAP set + an answered RIR prove proximity to failure.
 - **Baseline-conflict rule:** if a new baseline differs >20% from numbers Matt reported in chat,
   confirm with him before prefilling targets from it.

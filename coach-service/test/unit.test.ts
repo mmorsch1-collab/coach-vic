@@ -13,6 +13,7 @@ import {
   type SetLog,
   type WhoopRow,
 } from '../src/coaching/metrics.js';
+import { summarizeMmc, recentPain, lastRirByExercise, type FeedbackEntry } from '../src/coaching/feedback.js';
 import { recoveryColor, midMorningOpportunity, eveningConcern } from '../src/scheduler/gating.js';
 import type { WhoopAssessment } from '../src/scheduler/gating.js';
 import { retrieveContext } from '../src/memory/retrieval.js';
@@ -336,5 +337,51 @@ describe('unclassifiedExercises + overrides', () => {
     expect(muscleOf('Bench Press')).toBe('shoulders');
     setMuscleOverrides({}); // reset so later tests see the pure classifier
     expect(muscleOf('Bench Press')).toBe('chest');
+  });
+});
+
+describe('workout feedback aggregation', () => {
+  const REF = '2026-07-24';
+  const e = (date: string, exercise: string, extra: Partial<FeedbackEntry>): FeedbackEntry =>
+    ({ date, exercise, ...extra });
+
+  it('flags an exercise with 2+ weak/none MMC as a replacement candidate', () => {
+    const entries = [
+      e('2026-07-18', 'Cable Fly', { mmc: 'none' }),
+      e('2026-07-21', 'Cable Fly', { mmc: 'weak' }),
+      e('2026-07-22', 'Incline DB Press', { mmc: 'strong' }),
+    ];
+    const s = summarizeMmc(entries, 42, REF);
+    const fly = s.find((x) => x.exercise === 'Cable Fly')!;
+    expect(fly.replaceCandidate).toBe(true);
+    expect(fly.weakOrNone).toBe(2);
+    expect(s.find((x) => x.exercise === 'Incline DB Press')!.replaceCandidate).toBe(false);
+  });
+
+  it('does not flag a single weak rating (noise)', () => {
+    const s = summarizeMmc([e('2026-07-22', 'Pec Deck', { mmc: 'weak' })], 42, REF);
+    expect(s[0].replaceCandidate).toBe(false);
+  });
+
+  it('surfaces recent pain, newest first, and ignores old', () => {
+    const p = recentPain(
+      [
+        e('2026-07-23', 'RDL', { painArea: 'lower back', painSeverity: 'moderate' }),
+        e('2026-05-01', 'Squat', { painArea: 'left hip', painSeverity: 'mild' }), // > 21d out
+      ],
+      21,
+      REF,
+    );
+    expect(p.length).toBe(1);
+    expect(p[0].area).toBe('lower back');
+  });
+
+  it('tracks the latest RIR per exercise', () => {
+    const r = lastRirByExercise(
+      [e('2026-07-20', 'Bench', { rir: 2 }), e('2026-07-23', 'Bench', { rir: 0 })],
+      21,
+      REF,
+    );
+    expect(r['Bench'].rir).toBe(0);
   });
 });
