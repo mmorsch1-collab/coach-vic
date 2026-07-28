@@ -7,7 +7,6 @@ import {
   type WhoopAssessment,
 } from './gating.js';
 import { logger } from '../logger.js';
-import { todayProteinTotal, PROTEIN_TARGET_G } from '../coaching/nutrition.js';
 import { workoutSheetStatus } from '../coaching/workoutIngest.js';
 import { parseWorkoutDb } from '../coaching/metrics.js';
 import { bridge } from '../bridge/client.js';
@@ -63,53 +62,6 @@ async function runGenericCheckin(label: string, opp: OpportunityFn): Promise<Che
   const message = await composeNudge(intent, a);
   if (isSkip(message)) {
     logger.info({ label }, 'LLM judged not worth sending');
-    return { sent: false, reason: 'llm skipped' };
-  }
-  return { sent: true, message };
-}
-
-/**
- * Evening protein check — fires ONLY if Matt is behind his daily protein target.
- * Deterministic gate (the running total is computed, not recalled); LLM only
- * composes the nudge (and may still SKIP if not worth interrupting).
- */
-export async function runProteinCheck(): Promise<CheckinResult> {
-  const { totalG, remainingG, meals } = await todayProteinTotal();
-  if (totalG >= PROTEIN_TARGET_G) return { sent: false, reason: 'protein target met' };
-
-  // Deterministic suppressors — don't pay the LLM to decide what code can decide:
-  // close enough to target isn't worth an interruption…
-  if (remainingG <= 15) return { sent: false, reason: `within 15g of target (${remainingG}g to go)` };
-  // …and "nothing logged" needs a question, not judgment — fixed template, no LLM.
-  if (meals === 0) {
-    return {
-      sent: true,
-      message:
-        `No meals logged yet today — what did you eat? Give me the rundown and I'll tally your protein ` +
-        `(target ${PROTEIN_TARGET_G}g).`,
-    };
-  }
-
-  const instruction = [
-    `Coachable moment: Matt is behind his protein target this evening.`,
-    `Context (do NOT dump this at him): today=${Math.round(totalG)}g / ${PROTEIN_TARGET_G}g, ${remainingG}g to go (${meals} meal(s) logged).`,
-    ``,
-    `Write ONE short Telegram message in Coach Vic's voice: note where he stands and give a single`,
-    `concrete way to close the gap tonight (a specific high-protein option). No data dump, no visible`,
-    `reasoning. If it's genuinely not worth interrupting, reply with exactly "SKIP" and nothing else.`,
-  ].join('\n');
-
-  const r = await runTurn({
-    messages: [{ role: 'user', content: instruction }],
-    sessionType: 'isolated',
-    retrievalQuery: 'protein intake evening',
-    tier: 'primary',
-    maxTokens: 400,
-    maxIterations: 4,
-  });
-  const message = r.text.trim();
-  if (isSkip(message)) {
-    logger.info('Protein check: LLM judged not worth sending');
     return { sent: false, reason: 'llm skipped' };
   }
   return { sent: true, message };

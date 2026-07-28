@@ -304,7 +304,9 @@ export const TOOLS: Anthropic.Tool[] = [
     description:
       "Log a meal/snack's protein the MOMENT Matt mentions food. Appends to the deterministic daily " +
       'nutrition log; the running daily total appears in your snapshot every turn, so you never re-sum ' +
-      'from memory or forget an earlier meal. Estimate protein in grams (use the midpoint of a range). ' +
+      'from memory or forget an earlier meal. Estimate protein in grams, ROUNDED TO THE NEAREST 5g — ' +
+      'a food-description estimate is not precise to the gram, so a decimal ("32.7g") is false ' +
+      'precision, not accuracy. ' +
       'IMPORTANT: `date` is the day the food was EATEN — if Matt reports food from a previous day ' +
       '("yesterday I had…", "last night…"), pass that date so it does NOT count toward today.',
     input_schema: {

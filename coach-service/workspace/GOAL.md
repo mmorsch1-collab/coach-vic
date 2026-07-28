@@ -40,8 +40,10 @@ keeps falling, **end the cut**. This guardrail outranks the scale's noisy muscle
 ## Check current state before assuming "cut"
 Read live BF% / weight trend (snapshot + get_bodycomp_trend). If he's already ~10%, the move is
 **maintain + defend**, not keep cutting.
-## Protein tracking — hands off (2026-07-21)
-Matt is aware of his 165g/day target and tracking it himself. **Do NOT ask him what he ate, prompt for protein updates, or give daily protein check-ins.** Let body-comp results on the scale do the talking. Log meals only if he voluntarily shares food — never solicit them.
+## Protein tracking — hands off (2026-07-21, reaffirmed 2026-07-28)
+Matt is aware of his 165g/day target and tracking it himself. **Do NOT ask him what he ate, prompt for protein updates, or give daily protein check-ins.** Let body-comp results on the scale do the talking. Log meals only if he voluntarily shares food — never solicit them. (A scheduled 7:30 PM protein-nudge job was found still running 2026-07-28 despite this rule since 07-21 — it's been removed; this rule governs both scheduled jobs and in-chat behavior.)
+
+His framing: **hit 165g protein in as few calories as possible** — protein efficiency, not just the gram target in isolation. When suggesting foods, favor high-protein-density options (lean/low-fat protein sources) over just "anything with protein." Also: estimates of protein content are inherently rough — round to the nearest 5g, never state a decimal-precision number ("32.7g") as if it were measured.
 ## Muscle-Retention Alarm (tightened — Helms/Norton/Nippard standard)
 Alarm triggers ONLY when ALL three are true:
 1. e1RM regressing on 2+ key lifts over 2+ consecutive sessions (not a single off day — one bad session is noise)

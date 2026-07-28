@@ -7,7 +7,7 @@ import { tryReserveProactive, wouldAllowProactive } from './proactiveState.js';
 import { appendDailyLog } from '../memory/store.js';
 import { mainSession } from '../session/session.js';
 import { runMorningRitual } from './morningRitual.js';
-import { runMidMorningCheck, runAfternoonCheck, runEveningCheck, runProteinCheck, runMissedWorkoutCheck, type CheckinResult } from './checkins.js';
+import { runMidMorningCheck, runAfternoonCheck, runEveningCheck, runMissedWorkoutCheck, type CheckinResult } from './checkins.js';
 import { runDailyCuration } from '../memory/curation.js';
 import { runSelfHeal } from './selfHeal.js';
 import { runMaintenanceReport } from './maintenance.js';
@@ -179,8 +179,6 @@ export function registerJobs(deps: JobDeps): ScheduledTask[] {
   tasks.push(cron.schedule('30 10 * * 1-5', guard('mid-morning-10:30', () => checkinJob('mid-morning', runMidMorningCheck, deps)), tzOpt));
   // M–F 3:30 PM — afternoon.
   tasks.push(cron.schedule('30 15 * * 1-5', guard('afternoon-15:30', () => checkinJob('afternoon', runAfternoonCheck, deps)), tzOpt));
-  // Daily 7:30 PM — protein nudge (only if behind target).
-  tasks.push(cron.schedule('30 19 * * *', guard('protein-19:30', () => checkinJob('protein-evening', runProteinCheck, deps)), tzOpt));
   // Daily 8:30 PM — evening (high bar).
   tasks.push(cron.schedule('30 20 * * *', guard('evening-20:30', () => checkinJob('evening', runEveningCheck, deps)), tzOpt));
   // Sunday 8:00 AM — weekly review (the data-rich coaching message).
