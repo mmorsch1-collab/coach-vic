@@ -241,3 +241,12 @@ Matt identified a Friday-night snack pattern that leaks ~100–150 kcal post-din
 
 ## perf_087 — Matt reads fatigue signals clearly
 Matt self-identifies rep-drop fatigue (e.g., "Biceps were not there. You can see the fatigue in completed reps") and proactively asks for programming to match (hold load, let volume recover). He doesn't need daily WHOOP cues — give him a clear readiness standard upfront (last-set RIR, rep-range thresholds) and he owns the decision. This is a coaching asset: lead with the framework, trust his feedback loop.
+
+## perf_029 — strength resilience in deficit
+Week of 2026-07-20 to 2026-07-26: Matt executed 5/5 sessions, hit MAV on all muscle groups, chest at MRV (20 sets). Major PRs landed despite active deficit:
+- Leg Press e1RM 288 → 379 (+91) in 15d
+- Cable Row e1RM 108 → 144 (+36)
+- DB Row 40 lbs solid
+- Overhead Press e1RM 87 → 106 (+19)
+
+Weight trend -0.7 lb/wk (target band). Muscle mass snapshot showed down, but e1RM strength across 4 major lifts held and climbed — strength-retention guardrail clean. This confirms: e1RM trend is the reliable muscle proxy in a deficit, not the scale's muscle reading (which has higher noise floor at lower BF%).
