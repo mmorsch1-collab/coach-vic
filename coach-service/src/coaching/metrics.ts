@@ -264,8 +264,19 @@ export function daysSince(dateStr: string): number {
   return Math.floor((Date.now() - Date.parse(dateStr + 'T12:00:00')) / 86400000);
 }
 
-/** Weekly "hard set" count per muscle over the trailing `days`. A hard set =
- * a logged working set of ≥5 reps (warmups/empties excluded).
+/**
+ * A "hard set" within one exercise's logged reps. No rep-count floor: Matt
+ * never plans a set under 5 reps, so any logged set that low is a failure to
+ * hit the target under fatigue, not a warmup ramp — still a hard set (Matt:
+ * "i only did 4 because thats all i could do, they were hard" / "the only
+ * time ill mark a set under 5 reps is if I fail to meet the target").
+ */
+function hardSetCount(reps: number[]): number {
+  return reps.filter((r) => r >= 1).length;
+}
+
+/** Weekly "hard set" count per muscle over the trailing `days`. See
+ * `hardSetCount` for what counts as a hard set (warmups/empties excluded).
  *
  * NOTE: this is the ROLLING window. Protocol volume decisions must use
  * `hardSetsInRange` over the Mon–Sun calendar week instead — a rolling window
@@ -276,7 +287,7 @@ export function weeklyHardSets(logs: SetLog[], days = 7): Record<string, number>
   const counts: Record<string, number> = {};
   for (const l of logs) {
     if (Date.parse(l.date + 'T12:00:00') < cutoff) continue;
-    const hard = l.reps.filter((r) => r >= 5).length;
+    const hard = hardSetCount(l.reps);
     if (!hard) continue;
     const m = muscleOf(l.exercise);
     if (m === 'warmup') continue; // prehab/ramp rows are not hard sets
@@ -299,7 +310,7 @@ export function hardSetsInRange(logs: SetLog[], start: string, end: string): Rec
   const counts: Record<string, number> = {};
   for (const l of logs) {
     if (!l.date || l.date < start || l.date > end) continue;
-    const hard = l.reps.filter((r) => r >= 5).length;
+    const hard = hardSetCount(l.reps);
     if (!hard) continue;
     const m = muscleOf(l.exercise);
     if (m === 'warmup') continue; // prehab/ramp rows are not hard sets

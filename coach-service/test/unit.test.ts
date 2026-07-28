@@ -136,9 +136,10 @@ describe('hardSetsInRange (calendar-week volume)', () => {
     expect(hardSetsInRange(sunday, '2026-07-20', '2026-07-26').chest).toBe(3);
     expect(hardSetsInRange(sunday, '2026-07-27', '2026-08-02').chest).toBeUndefined();
   });
-  it('ignores sub-5-rep sets (warmups)', () => {
-    expect(hardSetsInRange([log('2026-07-20', 'Bench Press', [3, 4])], '2026-07-20', '2026-07-26').chest)
-      .toBeUndefined();
+  it('counts a sub-5-rep set (Matt never plans one — it means he failed to hit the target, still a hard set)', () => {
+    // e.g. 60x12, 60x11, 60x6, 60x4 — the 4-rep set is the muscle giving out, still a hard set.
+    expect(hardSetsInRange([log('2026-07-20', 'Tricep Pushdown', [12, 11, 6, 4])], '2026-07-20', '2026-07-26').triceps)
+      .toBe(4);
   });
 });
 

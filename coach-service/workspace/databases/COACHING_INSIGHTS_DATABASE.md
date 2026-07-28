@@ -264,3 +264,17 @@ These were prompted by: rear delt fly being added unnecessarily, rolling window 
 **Fix:** Before building ANY session, map all 5 days' set distribution across all muscle groups and confirm each group hits MAV exactly (or at MRV max) by Friday with no fractional remainders. Orphaned 1–3 set remainders on Friday = planning error, not a programming choice.
 
 **Standard:** If a muscle group can't reach MAV in clean, meaningful blocks (minimum 3–4 sets per session), flag and rebalance earlier in the week. Never leave 1–2 orphaned sets for a day where they don't belong.
+
+## ci_024 — Sheet-build reconciliation (2026-07-24)
+On 2026-07-24, I built a leg session with 13 sets but communicated it as 10 sets without reading back `create_workout`'s returned `built_set_counts`. Matt immediately caught the discrepancy (4+3+3+3=13, not 10).
+
+**Root cause:** I stated a pre-build plan number ("10 sets"), then built without reconciling against that intent, and reported the stale number instead of the tool's actual output.
+
+**Fix (locked):** `create_workout` returns `built_set_counts` and `week_projection`. ALWAYS read that return and report those numbers verbatim to Matt. Never state a volume number from memory or pre-build plan — the sheet IS the plan once it's created. If the built counts don't match intent, either fix the sheet immediately or explicitly state the reason for the overshoot before sending.
+
+## CI_027 — Rep-target bumped without a clean last-set hit (2026-07-28)
+DB Curl's rep target was advanced to 14 for the 2026-07-28 session. Its prior logged session (2026-07-24) was 25×13, 13, 8 — the first two sets hit 13, but the last set dropped to 8. Per WORKOUT_PROTOCOL.md's double-progression readiness standard (`workspace/WORKOUT_PROTOCOL.md:79`): "the LAST set must hit the target rep range cleanly before increasing load — not the first set... Do NOT advance load when only the top set is hitting the target while later sets drop significantly." That standard is written for load, but the same logic governs the reps side of double progression — an 8-rep fade on the last set is not a clean 13, and the target should have held at 13, not advanced to 14.
+
+**Root cause:** Applied the readiness check by eyeballing the first set(s) instead of the pattern across the whole session before bumping the rep target.
+
+**Fix (locked):** Before advancing a rep target (not just load), pull the full prior session's rep array for that exact exercise name and check the LAST set specifically. If the last set fell meaningfully short of the target, hold the rep target — do not advance it — regardless of what earlier sets hit.
