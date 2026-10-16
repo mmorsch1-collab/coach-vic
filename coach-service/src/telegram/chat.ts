@@ -16,7 +16,10 @@ export interface InboundMessage {
  * conversation, runs a coaching turn with tools + retrieved memory, persists the
  * updated history, and returns the reply text.
  */
-export async function handleUserMessage(input: string | InboundMessage): Promise<string> {
+export async function handleUserMessage(
+  input: string | InboundMessage,
+  opts: { retry?: boolean } = {},
+): Promise<string> {
   const { text, image } = typeof input === 'string' ? { text: input, image: undefined } : input;
   const history = await mainSession.getHistory();
 
@@ -36,7 +39,9 @@ export async function handleUserMessage(input: string | InboundMessage): Promise
     : text;
   const messages = [...history, { role: 'user' as const, content: userContent }];
 
-  await appendDailyLog(todayStr(config.tz), `[matt] ${image ? `[photo] ${text}`.trim() : text}`);
+  // A resend after a failed attempt is tagged so the log doesn't read as a duplicate.
+  const tag = opts.retry ? '[matt:retry-after-failure]' : '[matt]';
+  await appendDailyLog(todayStr(config.tz), `${tag} ${image ? `[photo] ${text}`.trim() : text}`);
 
   const result = await runTurn({
     messages,

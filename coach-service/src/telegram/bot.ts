@@ -2,6 +2,9 @@ import { Bot } from 'grammy';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { handleUserMessage } from './chat.js';
+import { ownerOnly, InboundDeduper } from './inbound.js';
+import { appendDailyLog } from '../memory/store.js';
+import { todayStr } from '../util/time.js';
 
 /**
  * Telegram transport (grammY, long-polling — no public webhook). Serves ONLY the
@@ -28,19 +31,29 @@ function chunk(text: string): string[] {
 export class CoachBot {
   private bot: Bot;
   private readonly chatId: string;
+  private readonly dedupe = new InboundDeduper();
 
   constructor() {
     this.bot = new Bot(config.telegramBotToken);
     this.chatId = config.telegramChatId;
 
-    // Only respond to the owner; ignore everyone else.
+    // FIRST middleware: owner-only ingress for EVERY update type. Anything not
+    // from the configured private chat + user id is dropped silently (inbound.ts).
+    // TELEGRAM_USER_ID defaults to the chat id (they are equal for a private chat).
+    this.bot.use(
+      ownerOnly({ chatId: this.chatId, userId: String(process.env.TELEGRAM_USER_ID || this.chatId) }) as any,
+    );
+
     this.bot.on('message:text', async (ctx) => {
-      const from = String(ctx.chat.id);
-      if (from !== this.chatId) {
-        logger.warn({ from }, 'Ignoring message from non-owner chat');
+      const text = ctx.message.text;
+      // Dedupe: never process the same message twice; a resend after a failed
+      // attempt is processed and logged as a retry (inbound.ts).
+      const { decision, hash } = await this.dedupe.begin(ctx.message.message_id, text);
+      if (decision === 'duplicate') {
+        logger.info({ messageId: ctx.message.message_id }, 'Duplicate inbound message dropped');
         return;
       }
-      const text = ctx.message.text;
+      let ok = false;
       // Telegram's typing indicator lasts ~5s; a multi-tool Sonnet turn can run
       // much longer — keep it alive so Matt sees "typing…" instead of dead air.
       const typing = setInterval(
@@ -49,13 +62,18 @@ export class CoachBot {
       );
       try {
         await ctx.replyWithChatAction('typing');
-        const reply = await handleUserMessage(text);
+        const reply = await handleUserMessage(text, { retry: decision === 'retry' });
         clearInterval(typing);
         for (const part of chunk(reply)) {
           await this.sendPart(part);
         }
+        ok = true;
       } catch (err) {
         logger.error({ err }, 'Failed handling inbound message');
+        await appendDailyLog(
+          todayStr(config.tz),
+          `[system] previous message was NOT answered (${(err as Error)?.message ?? 'error'}) — a resend is a retry, not a duplicate`,
+        ).catch(() => undefined);
         try {
           await ctx.reply('Hit a snag on my end — try that again in a moment.');
         } catch {
@@ -63,17 +81,17 @@ export class CoachBot {
         }
       } finally {
         clearInterval(typing);
+        await this.dedupe.finish(hash, ok).catch(() => undefined);
       }
     });
 
     // Photos (meal pics): download, pass to the vision turn with the caption.
     this.bot.on('message:photo', async (ctx) => {
-      const from = String(ctx.chat.id);
-      if (from !== this.chatId) {
-        logger.warn({ from }, 'Ignoring photo from non-owner chat');
-        return;
-      }
       const caption = ctx.message.caption ?? '';
+      const photoKey = `photo:${ctx.message.photo[ctx.message.photo.length - 1]?.file_unique_id}:${caption}`;
+      const { decision, hash } = await this.dedupe.begin(ctx.message.message_id, photoKey);
+      if (decision === 'duplicate') return;
+      let ok = false;
       const typing = setInterval(
         () => void ctx.replyWithChatAction('typing').catch(() => undefined),
         4_500,
@@ -98,6 +116,7 @@ export class CoachBot {
         for (const part of chunk(reply)) {
           await this.sendPart(part);
         }
+        ok = true;
       } catch (err) {
         logger.error({ err }, 'Failed handling inbound photo');
         try {
@@ -107,13 +126,12 @@ export class CoachBot {
         }
       } finally {
         clearInterval(typing);
+        await this.dedupe.finish(hash, ok).catch(() => undefined);
       }
     });
 
     // Voice/audio: no transcription path yet — fail gracefully instead of silently.
     this.bot.on(['message:voice', 'message:audio', 'message:video_note'], async (ctx) => {
-      const from = String(ctx.chat.id);
-      if (from !== this.chatId) return;
       try {
         await ctx.reply("Can't listen to voice notes yet — shoot me a text and I'm on it. 📝");
       } catch {
