@@ -10,7 +10,8 @@ import {
 } from '../memory/store.js';
 import { invalidateSystemCache } from './systemPrompt.js';
 import { appendEntry, DB_FILES, type DbFile } from '../memory/databases.js';
-import { todayStr, calendarWeek } from '../util/time.js';
+import { todayStr, calendarWeek, addDaysStr } from '../util/time.js';
+import { parseBodyCompSheet, weekOverWeek, cleanWithingsSummary, cleanWeightHistory } from '../coaching/bodyComp.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { e1rm, exerciseSeries, parseWorkoutDb, hardSetsInRange, sessionDatesInRange, slopePerWeek, progressionTarget, muscleOf, VOLUME_BANDS, bestE1rmBefore } from '../coaching/metrics.js';
@@ -401,8 +402,9 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'get_bodycomp_trend',
     description:
-      'Body-composition trend from BODY_COMPOSITION: recent weight/BF% and the weight slope ' +
-      '(lb/week) for managing the cut/maintenance rate.',
+      'Body-composition trend from BODY_COMPOSITION: recent weight/BF%/muscle, the weight slope ' +
+      '(lb/week), and this-week-vs-last-week averages for BF% and muscle mass (smooths day-to-day ' +
+      'scale noise — use these averages, not single readings, when judging progress).',
     input_schema: {
       type: 'object',
       properties: { days: { type: 'number', description: 'Window in days (default 21).' } },
@@ -517,9 +519,9 @@ export async function executeTool(
         return json(await bridge.whoopToday());
       case 'get_withings_latest':
         // Flat summary (weight + body comp merged) — better for the LLM than raw /latest.
-        return json(await bridge.withingsSummary());
+        return json(cleanWithingsSummary(await bridge.withingsSummary()));
       case 'get_withings_history':
-        return json(await bridge.withingsHistory(clampDays(input?.days, 7)));
+        return json(cleanWeightHistory(await bridge.withingsHistory(clampDays(input?.days, 7))));
       case 'get_strava_latest':
         return json(await bridge.stravaLatest());
       case 'get_calendar_today':
@@ -801,27 +803,28 @@ export async function executeTool(
       case 'get_bodycomp_trend': {
         const rows = (await bridge.readSheet('BODY_COMPOSITION')) as unknown[][];
         const days = clampDays(input?.days, 21);
-        const header = (rows[0] || []).map((h) => String(h ?? '').trim().toLowerCase());
-        const di = header.findIndex((h) => h.includes('date'));
-        const wi = header.findIndex((h) => h.includes('weight'));
-        // Body-fat %, not "fat free mass" / "visceral fat": require body+fat or fat+%.
-        let fi = header.findIndex((h) => h.includes('body') && h.includes('fat'));
-        if (fi < 0) fi = header.findIndex((h) => h.includes('fat') && h.includes('%'));
-        const pts: Array<{ date: string; weight: number; bf: number }> = [];
-        for (let r = 1; r < rows.length; r++) {
-          const row = rows[r] || [];
-          const d = String(row[di] ?? '').trim();
-          const w = Number(row[wi]);
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !Number.isFinite(w)) continue;
-          pts.push({ date: d, weight: w, bf: Number(row[fi]) });
-        }
-        pts.sort((a, b) => a.date.localeCompare(b.date));
-        const cutoff = Date.now() - days * 86400000;
-        const windowed = pts.filter((p) => Date.parse(p.date + 'T12:00:00') >= cutoff);
-        const slope = slopePerWeek((windowed.length ? windowed : pts).map((p) => ({ date: p.date, y: p.weight })));
+        const today = todayStr(config.tz);
+        // Cleaned: blank/zero/implausible BF% & muscle are MISSING, never 0 (see bodyComp.ts).
+        const pts = parseBodyCompSheet(rows);
+        const cutoff = addDaysStr(today, -days);
+        const windowed = pts.filter((p) => p.date > cutoff && p.weight != null);
+        const slope = slopePerWeek(
+          (windowed.length ? windowed : pts.filter((p) => p.weight != null)).map((p) => ({ date: p.date, y: p.weight as number })),
+        );
+        const wow = weekOverWeek(pts, today);
         return json({
           recent: pts.slice(-8),
           weight_slope_lb_per_week: Math.round(slope * 100) / 100,
+          bf_pct_this_week_avg: wow.bfThisWeek,
+          bf_pct_last_week_avg: wow.bfLastWeek,
+          bf_pct_week_over_week_delta: wow.bfDelta,
+          muscle_lbs_this_week_avg: wow.muscleThisWeek,
+          muscle_lbs_last_week_avg: wow.muscleLastWeek,
+          muscle_lbs_week_over_week_delta: wow.muscleDelta,
+          valid_bodycomp_readings: { this_week: wow.nThisWeek, last_week: wow.nLastWeek },
+          data_quality:
+            'Failed/implausible readings (blank or 0, BF% <3 or >60, muscle <50% of weight) are excluded ' +
+            'and shown as null in "recent". Never treat a null as a real value.',
           latest: pts[pts.length - 1] ?? null,
         });
       }

@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { todayStr } from '../util/time.js';
 import { invalidateSnapshot } from '../coaching/snapshot.js';
 import { logger } from '../logger.js';
+import { cleanWithingsSummary, toNum } from '../coaching/bodyComp.js';
 
 /**
  * Sync Withings readings into the BODY_COMPOSITION sheet so the coach's body-comp
@@ -13,8 +14,12 @@ import { logger } from '../logger.js';
  *  - weight for each recent day (from weight-history)
  *  - body fat % + muscle for the latest reading (from the summary)
  */
-const round = (v: any, d = 1) =>
-  Number.isFinite(Number(v)) ? Math.round(Number(v) * 10 ** d) / 10 ** d : '';
+// null/blank → '' (a blank cell), NOT 0: Number(null) is 0, which used to write a
+// failed reading as a real "0" into the sheet.
+const round = (v: any, d = 1) => {
+  const n = toNum(v);
+  return n == null ? '' : Math.round(n * 10 ** d) / 10 ** d;
+};
 
 export async function syncBodyComp(backfillDays = 10): Promise<{ synced: number; reason?: string }> {
   // Existing dates already in the sheet (column A).
@@ -33,7 +38,10 @@ export async function syncBodyComp(backfillDays = 10): Promise<{ synced: number;
   // claims the same date with a BF-less row and starves the snapshot's body-fat
   // trend (the #1 stop-cutting signal) for days.
   try {
-    const s = (await bridge.withingsSummary()) as Record<string, any>;
+    // Clean BEFORE writing: a failed impedance read must land as a BLANK cell,
+    // never a 0 that every downstream average would count as a real reading.
+    const s = cleanWithingsSummary((await bridge.withingsSummary()) as Record<string, any>);
+    if (s?.dataQuality) logger.warn({ dataQuality: s.dataQuality }, 'BodyComp sync: dropped implausible fields');
     if (s?.weightLbs != null) {
       const dt = todayStr(config.tz, s.measuredAt ? new Date(s.measuredAt) : new Date());
       if (!have.has(dt)) {
@@ -58,7 +66,8 @@ export async function syncBodyComp(backfillDays = 10): Promise<{ synced: number;
     const hist = (await bridge.withingsHistory(backfillDays)) as Array<{ date: string; weight: { lbs: number } }>;
     for (const h of hist || []) {
       const dt = todayStr(config.tz, new Date(h.date));
-      if (!have.has(dt) && h.weight?.lbs != null) {
+      const lbs = toNum(h.weight?.lbs);
+      if (!have.has(dt) && lbs != null && lbs > 0) {
         toAppend.push([dt, round(h.weight.lbs, 1), '', '', '', '', 'auto-sync (Withings)']);
         have.add(dt);
       }
