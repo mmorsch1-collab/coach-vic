@@ -54,7 +54,8 @@ const REFRESH_FAIL_ALERT = 2;
 // errors and would now trip the persistent-failure escalation forever. Dropped
 // rather than nag Matt about a provider he's chosen not to reconnect.
 const PROVIDERS: Array<{ name: string; key: string; probe: () => Promise<unknown> }> = [
-  { name: 'WHOOP', key: 'whoop', probe: () => bridge.whoopToday() },
+  // WHOOP omitted too (2026-10-16): Matt no longer wears it (only Withings + Sheets),
+  // so a dead WHOOP token must not nag him to reconnect a device he doesn't use.
   { name: 'Withings', key: 'withings', probe: () => bridge.withingsLatest() },
   { name: 'Google', key: 'google', probe: () => bridge.calendarToday() },
 ];

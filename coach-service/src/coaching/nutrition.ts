@@ -13,7 +13,10 @@ import { logger } from '../logger.js';
  * Sheet columns: Date | Time | Meal | Food | Protein_g
  */
 
-export const PROTEIN_TARGET_G = 165; // see GOAL.md
+// ~1.0 g/lb bodyweight at ~148 lb (GOAL.md 2026-10-05). Evidence: muscle-retention
+// benefit plateaus ~0.7-1.0 g/lb (Morton 2018 meta-analysis); lean lifters in a
+// deficit sit at the top of that range (Helms 2014). Revisit if weight moves >5 lb.
+export const PROTEIN_TARGET_G = 150;
 const SHEET = 'NUTRITION_LOG';
 const HEADER = ['Date', 'Time', 'Meal', 'Food', 'Protein_g'];
 
