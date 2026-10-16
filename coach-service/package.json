@@ -14,7 +14,8 @@
     "ritual": "tsx src/scripts/runRitual.ts",
     "chat": "tsx src/scripts/replayChat.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "backlog": "tsx src/scripts/backlog.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.1",

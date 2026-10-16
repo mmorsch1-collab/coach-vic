@@ -13,6 +13,7 @@ import { appendEntry, DB_FILES, type DbFile } from '../memory/databases.js';
 import { todayStr, calendarWeek, addDaysStr } from '../util/time.js';
 import { gateWhoopToday } from '../coaching/whoopFreshness.js';
 import { canSelfEdit, currentTurn, untrusted } from './turnContext.js';
+import { addIssue, listIssues, transition } from '../backlog/store.js';
 import { bodyCompReviewStatus, completeBodyCompReview } from '../coaching/bodyCompReview.js';
 import { parseBodyCompSheet, weekOverWeek, weightTrend, cleanWithingsSummary, cleanWeightHistory } from '../coaching/bodyComp.js';
 import { config } from '../config.js';
@@ -442,6 +443,41 @@ export const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'report_issue',
+    description:
+      'Add an item to the improvement backlog when something needs a CODE change you cannot make ' +
+      'yourself: Matt reports a bug, a wrong number, or asks for a feature; or you notice your tools ' +
+      'or data behaving wrongly. (Rule/preference changes use update_coaching_rule instead.) Write the ' +
+      'title as the problem, and the detail as a precise repro: what happened, what was expected, ' +
+      'dates/values involved. Tell Matt it is logged for the next Claude Code session.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Short problem statement, e.g. "Volume counts a drop set as one set".' },
+        detail: { type: 'string', description: 'What happened, what was expected, and the data involved.' },
+      },
+      required: ['title', 'detail'],
+    },
+  },
+  {
+    name: 'list_issues',
+    description: 'List open improvement-backlog items (proposed and approved) with their ids.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'set_issue_status',
+    description:
+      'Change a backlog item when MATT says so: approve a proposed item, dismiss one, or mark one done.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer' },
+        status: { type: 'string', enum: ['approved', 'dismissed', 'done'] },
+      },
+      required: ['id', 'status'],
+    },
+  },
+  {
     name: 'complete_bodycomp_review',
     description:
       'Mark the monthly (4-week) body-comp review as DONE for the current window, clearing the ' +
@@ -866,6 +902,34 @@ export async function executeTool(
             'and shown as null in "recent". Never treat a null as a real value.',
           latest: pts[pts.length - 1] ?? null,
         });
+      }
+      case 'report_issue': {
+        const title = String(input?.title ?? '').trim();
+        const detail = String(input?.detail ?? '').trim();
+        if (!title) return ok('A title is required.');
+        // Matt's own turn = his report (approved). Anything else (a scheduled job,
+        // or text that came from a tool result) is only a PROPOSAL for him to approve.
+        const issue = await addIssue({ title, detail, source: currentTurn() ? 'matt' : 'vic' });
+        return ok(
+          issue.status === 'approved'
+            ? `Logged as backlog item #${issue.id}; it will be picked up in the next Claude Code session.`
+            : `Proposed backlog item #${issue.id}; Matt needs to approve it before it is worked on.`,
+        );
+      }
+      case 'list_issues': {
+        const open = (await listIssues()).filter((i) => i.status === 'proposed' || i.status === 'approved');
+        if (!open.length) return ok('The backlog is empty.');
+        return untrusted('improvement backlog', open.map((i) => ({ id: i.id, status: i.status, title: i.title, from: i.source })));
+      }
+      case 'set_issue_status': {
+        const turn = currentTurn();
+        if (!turn) return ok('Only Matt can change a backlog item, from his own message.');
+        const id = Math.round(Number(input?.id));
+        const to = input?.status as 'approved' | 'dismissed' | 'done';
+        if (!['approved', 'dismissed', 'done'].includes(to)) return ok('status must be approved, dismissed, or done.');
+        const from = to === 'approved' ? (['proposed'] as const) : (['proposed', 'approved'] as const);
+        const res = await transition(id, [...from], to);
+        return ok(res ? `Backlog item #${id} is now ${to}.` : `Backlog item #${id} can't move to ${to} from its current state.`);
       }
       case 'complete_bodycomp_review': {
         const st = await bodyCompReviewStatus();
