@@ -1,6 +1,8 @@
 import { runTurn } from '../llm/agent.js';
 import { logger } from '../logger.js';
 import { isSkip } from './sentinel.js';
+import type { CheckinResult } from './checkins.js';
+import { bodyCompReviewStatus, completeBodyCompReview } from '../coaching/bodyCompReview.js';
 import { addDaysStr, todayStr } from '../util/time.js';
 import { config } from '../config.js';
 
@@ -9,7 +11,7 @@ import { config } from '../config.js';
  * the computed trends and produces progress + 1–2 concrete adjustments + the
  * detections (plateau, too-fast loss, muscle-loss, low adherence).
  */
-export async function runWeeklyReview(): Promise<{ sent: boolean; message?: string; reason?: string }> {
+export async function runWeeklyReview(): Promise<CheckinResult> {
   const today = todayStr(config.tz);
   const weekDates = Array.from({ length: 7 }, (_, i) => addDaysStr(today, -(7 - i))); // Sun..Sat
 
@@ -36,9 +38,18 @@ export async function runWeeklyReview(): Promise<{ sent: boolean; message?: stri
     `no visible reasoning. If there's genuinely nothing worth a weekly message, reply exactly "SKIP".`,
   ].join('\n');
 
+  // Monthly body-comp review: folded into the weekly review ONCE per 4-week window,
+  // and cleared only after the message is actually delivered (bodyCompReview.ts).
+  const review = await bodyCompReviewStatus().catch(() => ({ due: false, window: 0, weeksIn: 0 }));
+  const prompt = review.due
+    ? instruction +
+      '\n\nThis week also closes a 4-week body-comp window: add ONE sentence on whether the BF% trend ' +
+      'is on pace for the ~0.3–0.5% BF/month target toward the Dec 29 date (use the cleaned averages).'
+    : instruction;
+
   try {
     const r = await runTurn({
-      messages: [{ role: 'user', content: instruction }],
+      messages: [{ role: 'user', content: prompt }],
       sessionType: 'isolated',
       retrievalQuery: 'weekly review progress plateau cut rate recovery adherence',
       tier: 'heavy',
@@ -47,7 +58,7 @@ export async function runWeeklyReview(): Promise<{ sent: boolean; message?: stri
     });
     const message = r.text.trim();
     if (isSkip(message)) return { sent: false, reason: 'nothing worth a review' };
-    return { sent: true, message };
+    return { sent: true, message, onDelivered: review.due ? () => completeBodyCompReview() : undefined };
   } catch (err: any) {
     logger.error({ err }, 'Weekly review failed');
     return { sent: false, reason: `error: ${err?.message ?? err}` };

@@ -24,6 +24,8 @@ export interface CheckinResult {
   sent: boolean;
   message?: string;
   reason?: string;
+  /** Runs only after the message was actually delivered (e.g. clear a due flag). */
+  onDelivered?: () => Promise<unknown>;
 }
 
 async function composeNudge(intent: string, a: WhoopAssessment): Promise<string> {

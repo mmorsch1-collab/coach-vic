@@ -136,7 +136,10 @@ async function checkinJob(type: string, run: () => Promise<CheckinResult>, deps:
   }
   const res = await run();
   if (res.sent && res.message) {
-    await emit(type, res.message, deps);
+    const delivered = await emit(type, res.message, deps);
+    if (delivered && res.onDelivered) {
+      await res.onDelivered().catch((err) => logger.warn({ err, type }, 'onDelivered hook failed'));
+    }
   } else {
     logger.info({ type, reason: res.reason }, 'Check-in stayed silent');
   }

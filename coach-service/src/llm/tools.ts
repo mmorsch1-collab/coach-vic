@@ -12,6 +12,7 @@ import { invalidateSystemCache } from './systemPrompt.js';
 import { appendEntry, DB_FILES, type DbFile } from '../memory/databases.js';
 import { todayStr, calendarWeek, addDaysStr } from '../util/time.js';
 import { gateWhoopToday } from '../coaching/whoopFreshness.js';
+import { bodyCompReviewStatus, completeBodyCompReview } from '../coaching/bodyCompReview.js';
 import { parseBodyCompSheet, weekOverWeek, weightTrend, cleanWithingsSummary, cleanWeightHistory } from '../coaching/bodyComp.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
@@ -413,6 +414,13 @@ export const TOOLS: Anthropic.Tool[] = [
       type: 'object',
       properties: { days: { type: 'number', description: 'Window in days (default 21).' } },
     },
+  },
+  {
+    name: 'complete_bodycomp_review',
+    description:
+      'Mark the monthly (4-week) body-comp review as DONE for the current window, clearing the ' +
+      '"review due" flag. Call ONLY right after you actually delivered the formal review to Matt.',
+    input_schema: { type: 'object', properties: {} },
   },
   {
     name: 'remember',
@@ -839,6 +847,13 @@ export async function executeTool(
             'and shown as null in "recent". Never treat a null as a real value.',
           latest: pts[pts.length - 1] ?? null,
         });
+      }
+      case 'complete_bodycomp_review': {
+        const st = await bodyCompReviewStatus();
+        if (!st.due) return ok('No body-comp review is due right now — nothing to clear.');
+        const w = await completeBodyCompReview();
+        invalidateSnapshot();
+        return ok(`Body-comp review for 4-week window ${w} marked done. The flag is cleared until the next window.`);
       }
       case 'remember':
         await appendEntry(input.database as DbFile, input.title, input.body);

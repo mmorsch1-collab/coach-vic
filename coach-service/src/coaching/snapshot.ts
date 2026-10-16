@@ -22,6 +22,7 @@ import {
 } from './metrics.js';
 import { todayProteinLine, proteinTrendLine } from './nutrition.js';
 import { parseBodyCompSheet, weightTrend, muscleSlope14 } from './bodyComp.js';
+import { bodyCompReviewStatus } from './bodyCompReview.js';
 import { allFeedback, recentPain, summarizeMmc } from './feedback.js';
 import { calendarWeek, weekdayLabel, hourOfTimestamp, todayStr, hourInTz, addDaysStr } from '../util/time.js';
 
@@ -35,8 +36,6 @@ import { calendarWeek, weekdayLabel, hourOfTimestamp, todayStr, hourInTz, addDay
 let cache: { text: string; at: number } | null = null;
 const TTL_MS = 10 * 60 * 1000;
 
-/** Miami-goal timeline anchor (GOAL.md) — drives the 4-weekly body-comp review. */
-const MIAMI_ANCHOR = '2026-07-18';
 
 export function invalidateSnapshot(): void {
   cache = null;
@@ -329,15 +328,22 @@ export async function buildSnapshot(): Promise<string> {
       lines.push(`Muscle mass 2wk trend: insufficient valid readings (${ms.n}) — do not infer a direction.`);
     }
 
-    // 4-weekly formal body-comp review against the Miami timeline.
-    const weeksIn = Math.floor(daysSince(MIAMI_ANCHOR) / 7);
-    if (weeksIn >= 4 && weeksIn % 4 === 0) {
+  }
+
+  // 4-weekly formal body-comp review: due ONCE per 4-week window and cleared when
+  // delivered (bodyCompReview.ts) — no longer re-raised on every turn for a week.
+  try {
+    const rv = await bodyCompReviewStatus(today);
+    if (rv.due) {
       lines.push(
-        `📋 MONTHLY BODY COMP REVIEW DUE (week ${weeksIn} of the Miami timeline). Run the formal ` +
-          `check-in: BF% + muscle mass trend vs the ~0.3–0.5% BF/month reduction target, and ` +
-          `whether the cut rate still fits the Dec 29 date.`,
+        `📋 Monthly body-comp review due (4-week window ${rv.window}, week ${rv.weeksIn} of the Miami ` +
+          `timeline). It runs in the Sunday weekly review — do not raise it unprompted in chat. If Matt ` +
+          `asks for it, do it (BF% + muscle trend from get_bodycomp_trend vs the ~0.3–0.5% BF/month ` +
+          `target and the Dec 29 date), then call complete_bodycomp_review.`,
       );
     }
+  } catch {
+    /* best-effort */
   }
 
   // Measurement-timing hygiene: scattered weigh-in times add noise to the slope.
