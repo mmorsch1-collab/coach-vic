@@ -20,6 +20,7 @@ import {
   type WhoopRow,
 } from './metrics.js';
 import { todayProteinLine, proteinTrendLine } from './nutrition.js';
+import { parseBodyCompSheet, weightTrend, muscleSlope14 } from './bodyComp.js';
 import { allFeedback, recentPain, summarizeMmc } from './feedback.js';
 import { calendarWeek, weekdayLabel, hourOfTimestamp, todayStr, hourInTz, addDaysStr } from '../util/time.js';
 
@@ -35,9 +36,6 @@ const TTL_MS = 10 * 60 * 1000;
 
 /** Miami-goal timeline anchor (GOAL.md) — drives the 4-weekly body-comp review. */
 const MIAMI_ANCHOR = '2026-07-18';
-/** Goal cut rate (GOAL.md): 0.5–0.75 lb/week. */
-const TARGET_LOSS_MIN = 0.5;
-const TARGET_LOSS_MAX = 0.75;
 
 export function invalidateSnapshot(): void {
   cache = null;
@@ -54,22 +52,6 @@ function parseGeneric(rows: unknown[][]): Array<Record<string, string>> {
 }
 const num = (v: string) => (v && Number.isFinite(Number(v)) ? Number(v) : NaN);
 const sign = (n: number, d = 1) => `${n >= 0 ? '+' : ''}${n.toFixed(d)}`;
-
-/**
- * Numeric value of the first header containing EVERY given substring (headers
- * are lowercased by parseGeneric). BODY_COMPOSITION was hand-created, so its
- * exact column spellings aren't guaranteed — match tolerantly rather than
- * hard-coding a name and silently reading NaN forever.
- */
-function field(row: Record<string, string>, ...parts: string[]): number {
-  const k = Object.keys(row).find((h) => parts.every((p) => h.includes(p)));
-  return k ? num(row[k]) : NaN;
-}
-/** Body-fat %, never "fat free mass" / "visceral fat" (same rule as get_bodycomp_trend). */
-function bodyFat(row: Record<string, string>): number {
-  const bf = field(row, 'body', 'fat');
-  return Number.isFinite(bf) ? bf : field(row, 'fat', '%');
-}
 
 export async function buildSnapshot(): Promise<string> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.text;
@@ -329,46 +311,43 @@ export async function buildSnapshot(): Promise<string> {
   }
 
   // ---- Body composition / Withings ----
-  const bcRows = parseGeneric(bcomp as unknown[][])
-    .filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r['date']) && Number.isFinite(field(r, 'weight')))
-    .sort((a, b) => b['date'].localeCompare(a['date']));
+  // Cleaned points: blank/zero/implausible BF% & muscle are MISSING (bodyComp.ts) —
+  // the 2026-10-08 failed reading used to count as 0 and fake a muscle drop.
+  const bcPts = parseBodyCompSheet(bcomp as unknown[][]);
+  const today = todayStr(config.tz);
   let weightSlope = NaN;
   let muscleSlope = NaN;
-  if (bcRows.length) {
-    const latest = bcRows[0];
-    weightSlope = slopePerWeek(bcRows.slice(0, 21).map((r) => ({ date: r['date'], y: field(r, 'weight') })));
-    const bfRow = bcRows.find((r) => Number.isFinite(bodyFat(r)));
-    const bf = bfRow ? bodyFat(bfRow) : NaN;
+  if (bcPts.length) {
+    const withWeight = bcPts.filter((p) => p.weight != null);
+    const latest = withWeight[withWeight.length - 1];
+    const bfRow = [...bcPts].reverse().find((p) => p.bf != null);
+    if (latest) {
+      lines.push(
+        `Body comp: ${latest.weight}lb (measured ${latest.date})` +
+          (bfRow ? `, ${bfRow.bf}% BF (measured ${bfRow.date})` : ', BF% unavailable') +
+          '.',
+      );
+    }
+
+    // Rate vs the goal band: TWO regression windows. "Too fast" only when both agree,
+    // so one stale high point (e.g. the Sept 25–30 150–151 lb readings) can't trip it.
+    const wt = weightTrend(bcPts, today);
+    // The muscle-retention alarm needs "weight dropping": use the recent (14d) fit,
+    // falling back to 21d only when 14d has too few readings.
+    weightSlope = wt.slope14 ?? wt.slope21 ?? NaN;
+    const f = (x: number | null, n: number) => (x == null ? `n/a (${n} readings)` : `${sign(x, 2)} lb/wk`);
     lines.push(
-      `Body comp: ${field(latest, 'weight')}lb (measured ${latest['date']})` +
-        (Number.isFinite(bf) ? `, ${bf}% BF (measured ${bfRow!['date']})` : ', BF% unavailable') +
-        '.',
+      `Weight trend (least-squares): 14d ${f(wt.slope14, wt.n14)}, 21d ${f(wt.slope21, wt.n21)} → ${wt.note}.`,
     );
 
-    // Rate vs the Miami goal band (loss is a NEGATIVE slope).
-    const lossRate = -weightSlope;
-    const rateNote =
-      !Number.isFinite(weightSlope)
-        ? 'insufficient data'
-        : lossRate < 0
-          ? `GAINING ${Math.abs(lossRate).toFixed(2)} lb/wk — not in deficit`
-          : lossRate < TARGET_LOSS_MIN
-            ? `below the ${TARGET_LOSS_MIN}–${TARGET_LOSS_MAX} lb/wk target band (slow)`
-            : lossRate > TARGET_LOSS_MAX
-              ? `⚠ ABOVE the ${TARGET_LOSS_MIN}–${TARGET_LOSS_MAX} lb/wk band — too fast, muscle risk`
-              : `on target (${TARGET_LOSS_MIN}–${TARGET_LOSS_MAX} lb/wk)`;
-    lines.push(`21d weight slope: ${sign(weightSlope, 2)} lb/wk → ${rateNote}.`);
-
     // Muscle mass: 2-week TREND only — single readings are glycogen/hydration noise.
-    const mmPts = bcRows
-      .filter((r) => daysSince(r['date']) <= 14 && Number.isFinite(field(r, 'muscle')))
-      .map((r) => ({ date: r['date'], y: field(r, 'muscle') }));
-    if (mmPts.length >= 3) {
-      muscleSlope = slopePerWeek(mmPts);
+    const ms = muscleSlope14(bcPts, today);
+    if (ms.slope != null) {
+      muscleSlope = ms.slope;
       const dir = muscleSlope < -0.1 ? '⚠ DOWN' : muscleSlope > 0.1 ? 'up' : 'flat';
-      lines.push(`Muscle mass 2wk trend: ${sign(muscleSlope, 2)} lb/wk (${dir}, ${mmPts.length} readings).`);
+      lines.push(`Muscle mass 2wk trend: ${sign(muscleSlope, 2)} lb/wk (${dir}, ${ms.n} valid readings).`);
     } else {
-      lines.push(`Muscle mass 2wk trend: insufficient readings (${mmPts.length}) — do not infer a direction.`);
+      lines.push(`Muscle mass 2wk trend: insufficient valid readings (${ms.n}) — do not infer a direction.`);
     }
 
     // 4-weekly formal body-comp review against the Miami timeline.

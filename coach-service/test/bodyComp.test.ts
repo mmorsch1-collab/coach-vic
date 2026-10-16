@@ -6,6 +6,10 @@ import {
   cleanWithingsSummary,
   cleanWeightHistory,
   toNum,
+  weightTrend,
+  muscleSlope14,
+  TARGET_LOSS_MIN,
+  TARGET_LOSS_MAX,
 } from '../src/coaching/bodyComp.js';
 
 // Real BODY_COMPOSITION tail (2026-09-14 → 2026-10-15). 2026-10-08 is the failed
@@ -123,5 +127,57 @@ describe('Withings tool cleaning', () => {
       { date: 'd', weight: {} },
     ]) as unknown[];
     expect(h).toHaveLength(1);
+  });
+});
+
+describe('weightTrend (regression: 21d slope anchored on the Sept 25–30 highs)', () => {
+  const pts = parseBodyCompSheet(SHEET);
+
+  it('reports BOTH a 14d and a 21d least-squares slope', () => {
+    const w = weightTrend(pts, '2026-10-16');
+    expect(w.slope14).not.toBeNull();
+    expect(w.slope21).not.toBeNull();
+    expect(w.n14).toBeGreaterThanOrEqual(4);
+  });
+  it('the 21d window alone reads "too fast" (the original bug)…', () => {
+    const w = weightTrend(pts, '2026-10-16');
+    expect(-(w.slope21 as number)).toBeGreaterThan(TARGET_LOSS_MAX);
+  });
+  it('…but the 14d window is ~flat (146–149 since Oct 2), so it is NOT flagged too fast', () => {
+    const w = weightTrend(pts, '2026-10-16');
+    expect(Math.abs(w.slope14 as number)).toBeLessThan(TARGET_LOSS_MIN);
+    expect(w.tooFast).toBe(false);
+    expect(w.verdict).toBe('mixed');
+    expect(w.note).toMatch(/do NOT call it too fast/);
+  });
+  it('flags too fast only when both windows exceed the band', () => {
+    // Steady -1.4 lb/wk for 21 days.
+    const steep = Array.from({ length: 21 }, (_, i) => ({
+      date: `2026-10-${String(i + 1).padStart(2, '0')}`, weight: 160 - i * 0.2, bf: 12, muscle: 128,
+    }));
+    const w = weightTrend(steep, '2026-10-21');
+    expect(w.tooFast).toBe(true);
+    expect(w.verdict).toBe('too_fast');
+  });
+  it('a steep 14d with a flat 21d is also "mixed", never "too fast"', () => {
+    const p = [
+      ...Array.from({ length: 10 }, (_, i) => ({ date: `2026-09-${String(i + 20).padStart(2, '0')}`, weight: 150, bf: 12, muscle: 128 })),
+      ...Array.from({ length: 14 }, (_, i) => ({ date: `2026-10-${String(i + 1).padStart(2, '0')}`, weight: 152 - i * 0.3, bf: 12, muscle: 128 })),
+    ];
+    const w = weightTrend(p, '2026-10-14');
+    expect(w.tooFast).toBe(false);
+  });
+  it('needs enough readings: <4 in the window is insufficient_data, not a verdict', () => {
+    const w = weightTrend(pts.slice(-2), '2026-10-16');
+    expect(w.slope14).toBeNull();
+    expect(w.verdict).toBe('insufficient_data');
+  });
+});
+
+describe('muscleSlope14 ignores the failed reading', () => {
+  it('computes a near-flat trend from valid readings only', () => {
+    const m = muscleSlope14(parseBodyCompSheet(SHEET), '2026-10-16');
+    expect(m.n).toBe(10); // 12 dated rows in (10-02, 10-16] minus 2 blank (10-03, 10-08)
+    expect(Math.abs(m.slope as number)).toBeLessThan(0.5);
   });
 });

@@ -11,7 +11,7 @@ import {
 import { invalidateSystemCache } from './systemPrompt.js';
 import { appendEntry, DB_FILES, type DbFile } from '../memory/databases.js';
 import { todayStr, calendarWeek, addDaysStr } from '../util/time.js';
-import { parseBodyCompSheet, weekOverWeek, cleanWithingsSummary, cleanWeightHistory } from '../coaching/bodyComp.js';
+import { parseBodyCompSheet, weekOverWeek, weightTrend, cleanWithingsSummary, cleanWeightHistory } from '../coaching/bodyComp.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { e1rm, exerciseSeries, parseWorkoutDb, hardSetsInRange, sessionDatesInRange, slopePerWeek, progressionTarget, muscleOf, VOLUME_BANDS, bestE1rmBefore } from '../coaching/metrics.js';
@@ -808,13 +808,20 @@ export async function executeTool(
         const pts = parseBodyCompSheet(rows);
         const cutoff = addDaysStr(today, -days);
         const windowed = pts.filter((p) => p.date > cutoff && p.weight != null);
-        const slope = slopePerWeek(
-          (windowed.length ? windowed : pts.filter((p) => p.weight != null)).map((p) => ({ date: p.date, y: p.weight as number })),
-        );
+        const slope = slopePerWeek(windowed.map((p) => ({ date: p.date, y: p.weight as number })));
         const wow = weekOverWeek(pts, today);
+        // Rate verdict from TWO regression windows; "too fast" only if BOTH exceed the band.
+        const wt = weightTrend(pts, today);
         return json({
           recent: pts.slice(-8),
           weight_slope_lb_per_week: Math.round(slope * 100) / 100,
+          weight_slope_window_days: days,
+          weight_slope_14d_lb_per_week: wt.slope14,
+          weight_slope_21d_lb_per_week: wt.slope21,
+          rate_verdict: wt.verdict,
+          rate_too_fast: wt.tooFast,
+          rate_note:
+            `${wt.note}. Judge the cut rate from rate_verdict (needs BOTH 14d and 21d above the band to be "too fast"), not from a single window.`,
           bf_pct_this_week_avg: wow.bfThisWeek,
           bf_pct_last_week_avg: wow.bfLastWeek,
           bf_pct_week_over_week_delta: wow.bfDelta,
