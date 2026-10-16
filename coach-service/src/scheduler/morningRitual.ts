@@ -66,9 +66,9 @@ export async function runMorningRitual(opts: { force?: boolean } = {}): Promise<
     `4. Create the workout calendar block with create_calendar_event:`,
     `   title like "🏋️ Workout — <split>", startTime "${workoutStart}", endTime "${workoutEnd}",`,
     `   and put the sheet URL in the description.`,
-    whoopFresh
-      ? `5. Save today's WHOOP numbers with save_whoop_snapshot.`
-      : `5. Skip save_whoop_snapshot (no scored numbers to save).`,
+    // WHOOP_History is written by the scheduled sync (whoopSync.ts). Saving here
+    // froze the row's strain at its wake-time value, so don't.
+    `5. Do NOT call save_whoop_snapshot — WHOOP history is logged automatically.`,
     `6. Optionally remember anything notable (remember / log_today).`,
     ``,
     `Then write the FINAL briefing message to send to Matt on Telegram. Coach voice: calm,`,

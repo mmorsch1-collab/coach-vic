@@ -118,7 +118,9 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'save_whoop_snapshot',
-    description: 'Persist today\'s WHOOP numbers to the history sheet (for trend tracking).',
+    description:
+      'Manual override only: WHOOP_History is logged automatically twice a day with the final ' +
+      'end-of-day strain. Do NOT call this in the morning (it would record wake-time strain).',
     input_schema: {
       type: 'object',
       properties: {

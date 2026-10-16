@@ -378,7 +378,15 @@ router.get(
     ]);
 
     const strainByCycle = new Map<string, number>();
-    for (const c of cycles) if (c?.id != null) strainByCycle.set(String(c.id), c?.score?.strain);
+    // A cycle runs wake → next wake; it has an `end` only once the day has CLOSED.
+    // Its strain is final (the day's total) only then — callers use `final` to
+    // overwrite an in-progress capture with the closed-day value.
+    const endByCycle = new Map<string, string | null>();
+    for (const c of cycles) {
+      if (c?.id == null) continue;
+      strainByCycle.set(String(c.id), c?.score?.strain);
+      endByCycle.set(String(c.id), c?.end ?? null);
+    }
     const sleepById = new Map<string, any>();
     for (const s of sleeps) if (s?.id != null) sleepById.set(String(s.id), s);
 
@@ -402,6 +410,10 @@ router.get(
           sleepHours: s ? sleepHours(s) : null,
           sleepScore: s?.score?.sleep_performance_percentage ?? null,
           strain: r.cycle_id != null ? (strainByCycle.get(String(r.cycle_id)) ?? null) : null,
+          // When WHOOP scored this recovery (lets callers derive the LOCAL date).
+          createdAt: r.created_at ?? null,
+          cycleEnd: r.cycle_id != null ? (endByCycle.get(String(r.cycle_id)) ?? null) : null,
+          final: r.cycle_id != null ? !!endByCycle.get(String(r.cycle_id)) : false,
           skinTemp: skinC != null ? Math.round(((skinC * 9) / 5 + 32) * 100) / 100 : null,
         };
       })

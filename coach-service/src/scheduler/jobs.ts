@@ -199,12 +199,12 @@ export function registerJobs(deps: JobDeps): ScheduledTask[] {
   // UPSERT, so re-running as he ticks more boxes corrects the rows — a partial
   // early capture never loses a later set. The 11:59 PM close is the backstop.
   tasks.push(cron.schedule('5 7-22 * * *', guard('auto-ingest', () => ingestWorkout(todayStr(config.tz)).then(() => undefined)), tzOpt));
-  // Daily 11:30 PM — log today's WHOOP row into WHOOP_History (silent, deduped).
-  // Independent of the morning ritual so the multi-day trend/HRV/strain signals
-  // keep working with auto sheet-building off. Late on purpose: recovery is
-  // scored once at wake and holds all day, but strain needs the full day to be
-  // meaningful. Runs before the 11:59 PM daily close.
+  // WHOOP_History (silent, deduped, keyed by the REAL scored date). 11:30 PM
+  // captures today's row (strain still accumulating); 1:00 PM the next day
+  // FINALIZES the previous days' strain to the closed-cycle total — a cycle only
+  // closes at the next wake, so the end-of-day value isn't knowable at 11:30 PM.
   tasks.push(cron.schedule('30 23 * * *', guard('whoop-sync-23:30', () => syncWhoopSnapshot().then(() => undefined)), tzOpt));
+  tasks.push(cron.schedule('0 13 * * *', guard('whoop-strain-finalize-13:00', () => syncWhoopSnapshot().then(() => undefined)), tzOpt));
   // Daily 6:00 AM — sync latest Withings reading into BODY_COMPOSITION (silent).
   tasks.push(cron.schedule('0 6 * * *', guard('bodycomp-sync', () => syncBodyComp().then(() => undefined)), tzOpt));
   // Daily 3:30 AM — memory curation.

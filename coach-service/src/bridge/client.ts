@@ -107,6 +107,7 @@ export class BridgeClient {
     return this.request<Array<{
       date: string; recovery: number | null; hrv: number | null; restingHeartRate: number | null;
       sleepHours: number | null; sleepScore: number | null; strain: number | null; skinTemp: number | null;
+      createdAt?: string | null; cycleEnd?: string | null; final?: boolean;
     }>>('GET', `/whoop/history-range?start=${start}&end=${end}`);
   }
   whoopHistory(days = 7) {

@@ -390,8 +390,9 @@ export function hrvDropStreak(rows: WhoopRow[], thresholdPct = 10): { days: numb
  *   - LOW (<10) is NOT flagged as undertrained — that fires on every
  *     morning-captured row and would tell Matt to add intensity off an
  *     artifact. `lowConfidence` marks the sample instead.
- * If end-of-day strain capture is added later, drop `lowConfidence` and
- * re-enable the undertrained branch.
+ * End-of-day capture now exists (whoopSync.ts finalizes each row to the
+ * closed-cycle strain), so new rows are day totals. `lowConfidence` stays as a
+ * guard for older morning-captured rows and for days the strap didn't sync.
  */
 export function strainPattern(
   rows: WhoopRow[],
