@@ -194,7 +194,7 @@ router.get(
 router.post(
   '/events',
   asyncHandler(async (req: Request, res: Response) => {
-    logger.info({ body: req.body }, 'Creating calendar event');
+    logger.info('Creating calendar event');
 
     const isAuthenticated = await googleAuth.isAuthenticated();
     if (!isAuthenticated) {
@@ -268,7 +268,7 @@ router.put(
   '/events/:id',
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    logger.info({ eventId: id, body: req.body }, 'Updating calendar event');
+    logger.info({ eventId: id }, 'Updating calendar event');
 
     const isAuthenticated = await googleAuth.isAuthenticated();
     if (!isAuthenticated) {

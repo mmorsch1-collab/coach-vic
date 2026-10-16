@@ -67,7 +67,7 @@ export class WithingsAuthService {
         },
       });
 
-      logger.info({ response: response.data }, 'Withings token response received');
+      logger.info({ hasAccessToken: !!response.data?.access_token || !!response.data?.body?.access_token }, 'Withings token response received');
 
       const { body, status } = response.data;
 

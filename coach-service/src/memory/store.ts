@@ -3,6 +3,7 @@ import path from 'path';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { todayStr, yesterdayStr } from '../util/time.js';
+import { scrubText } from '../logSafety.js';
 
 /**
  * Markdown-file memory (ported from the OpenClaw workspace, kept as files for
@@ -49,7 +50,9 @@ export async function appendDailyLog(date: string, entry: string): Promise<void>
   const file = dailyPath(date);
   await fs.mkdir(path.dirname(file), { recursive: true });
   const stamp = new Date().toISOString();
-  await fs.appendFile(file, `\n- [${stamp}] ${entry}\n`, 'utf-8');
+  // Daily logs are long-lived memory: never let a credential land in one (e.g. a
+  // pasted token, or a tool error echoing a URL with a key in it).
+  await fs.appendFile(file, `\n- [${stamp}] ${scrubText(entry)}\n`, 'utf-8');
 }
 
 /** Yesterday + today's daily logs, non-empty, joined (the shared "recent context"). */

@@ -152,7 +152,7 @@ router.get(
       }
 
       const latestRecovery = recoveryResponse.records[0];
-      logger.info({ recovery: latestRecovery }, 'Retrieved recovery from WHOOP');
+      logger.info({ scoreState: latestRecovery?.score_state }, 'Retrieved recovery from WHOOP');
 
       // Step 2: Get the cycle for this recovery (v1 API)
       const cyclesResponse = await whoopAuth.makeApiRequest<{ records: WhoopCycle[] }>(
@@ -161,7 +161,7 @@ router.get(
       );
 
       const latestCycle = cyclesResponse.records?.[0];
-      logger.info({ cycle: latestCycle }, 'Retrieved cycle from WHOOP');
+      logger.info({ cycleClosed: !!latestCycle?.end }, 'Retrieved cycle from WHOOP');
 
       // Transform recovery data and convert skin temp to Fahrenheit
       const skinTempC = latestRecovery.score?.skin_temp_celsius;
@@ -187,7 +187,7 @@ router.get(
         );
         if (sleepResponse.records && sleepResponse.records.length > 0) {
           sleep = sleepResponse.records[0];
-          logger.info({ sleep }, 'Retrieved sleep from WHOOP');
+          logger.info('Retrieved sleep from WHOOP');
         } else {
           logger.warn('No sleep records found');
         }

@@ -67,7 +67,7 @@ export class StravaAuthService {
         },
       });
 
-      logger.info({ response: response.data }, 'Strava token response received');
+      logger.info({ hasAccessToken: !!response.data?.access_token || !!response.data?.body?.access_token }, 'Strava token response received');
 
       const { access_token, refresh_token, expires_at, athlete } = response.data;
 

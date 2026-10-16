@@ -1,7 +1,10 @@
 import pino from 'pino';
 import { config } from './config.js';
+import { safeErr, scrubSecrets, scrubUrl } from './logSafety.js';
 
-// Create structured logger with pretty printing in development
+// Structured logger. Every log object is scrubbed of credentials and health/PII
+// payloads before it is written (see logSafety.ts for why: the 2026-10-16 audit
+// found client secrets and refresh tokens in bridge-api.out.log).
 export const logger = pino({
   level: config.logLevel,
   transport:
@@ -18,9 +21,18 @@ export const logger = pino({
   base: {
     env: config.nodeEnv,
   },
+  serializers: {
+    err: safeErr,
+    error: safeErr,
+  },
+  formatters: {
+    log: (obj) => scrubSecrets(obj, { health: true }) as Record<string, unknown>,
+  },
 });
 
-// Create request logger middleware for Express
+// Request logger middleware: method/path/status/duration only. OAuth callback
+// query strings (?code=…&state=…) are scrubbed; the client IP is not logged
+// (loopback-only service — it is always 127.0.0.1).
 export function createRequestLogger() {
   return (req: any, res: any, next: any) => {
     const start = Date.now();
@@ -29,10 +41,9 @@ export function createRequestLogger() {
       const duration = Date.now() - start;
       logger.info({
         method: req.method,
-        url: req.url,
+        url: scrubUrl(req.originalUrl ?? req.url),
         status: res.statusCode,
         duration,
-        ip: req.ip,
       }, 'HTTP Request');
     });
 

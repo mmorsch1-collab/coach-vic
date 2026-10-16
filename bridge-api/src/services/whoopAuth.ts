@@ -73,7 +73,7 @@ export class WhoopAuthService {
         }
       );
 
-      logger.info({ response: response.data }, 'WHOOP token response received');
+      logger.info({ hasAccessToken: !!response.data?.access_token || !!response.data?.body?.access_token }, 'WHOOP token response received');
 
       const { access_token, refresh_token, expires_in } = response.data;
 

@@ -51,7 +51,7 @@ router.get(
 router.post(
   '/goals',
   asyncHandler(async (req: Request, res: Response) => {
-    logger.info({ body: req.body }, 'Adding new goal');
+    logger.info('Adding new goal');
 
     // Validate input
     const validatedData = createGoalSchema.parse(req.body);
@@ -77,7 +77,7 @@ router.put(
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
 
-    logger.info({ goalId: id, body: req.body }, 'Updating goal progress');
+    logger.info({ goalId: id }, 'Updating goal progress');
 
     // Validate input
     const { current } = updateGoalProgressSchema.parse(req.body);
@@ -127,7 +127,7 @@ router.get(
 router.post(
   '/tasks',
   asyncHandler(async (req: Request, res: Response) => {
-    logger.info({ body: req.body }, 'Adding new task');
+    logger.info('Adding new task');
 
     // Validate input
     const validatedData = createTaskSchema.parse(req.body);
@@ -153,7 +153,7 @@ router.put(
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
 
-    logger.info({ taskId: id, body: req.body }, 'Updating task status');
+    logger.info({ taskId: id }, 'Updating task status');
 
     // Validate input
     const { status } = updateTaskStatusSchema.parse(req.body);
@@ -202,7 +202,7 @@ router.get(
 router.post(
   '/whoop-snapshot',
   asyncHandler(async (req: Request, res: Response) => {
-    logger.info({ body: req.body }, 'Recording WHOOP snapshot');
+    logger.info('Recording WHOOP snapshot');
 
     // Validate input
     const snapshot = whoopSnapshotSchema.parse(req.body);
@@ -228,7 +228,7 @@ router.post(
 router.post(
   '/workout',
   asyncHandler(async (req: Request, res: Response) => {
-    logger.info({ body: req.body }, 'Creating workout sheet');
+    logger.info('Creating workout sheet');
 
     const { date, title, recovery, exercises } = createWorkoutSchema.parse(req.body);
     const url = await googleSheets.createWorkoutSheet(date, title, exercises, recovery);
