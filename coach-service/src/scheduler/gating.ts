@@ -1,5 +1,6 @@
 import { bridge, isAuthError, type WhoopToday } from '../bridge/client.js';
-import { isFresh } from '../util/time.js';
+import { config } from '../config.js';
+import { assessFreshness, type FreshnessMode, type Freshness } from '../coaching/whoopFreshness.js';
 import { logger } from '../logger.js';
 
 /**
@@ -13,7 +14,8 @@ export type RecoveryColor = 'green' | 'yellow' | 'red' | 'unknown';
 export interface WhoopAssessment {
   ok: boolean; // data fetched and usable
   authError: boolean;
-  fresh: boolean; // metadata within 2h AND score_state SCORED
+  fresh: boolean; // passes the hard freshness gate for the requested mode (whoopFreshness.ts)
+  freshness?: Freshness;
   color: RecoveryColor;
   recovery: number | null;
   strain: number | null;
@@ -29,12 +31,12 @@ export function recoveryColor(score: number | null | undefined): RecoveryColor {
 }
 
 /**
- * @param maxAgeHours freshness window for recovery.metadata.updated_at. The 5:15
- * ritual needs a freshly-scored TODAY recovery (2h). Day-part check-ins only need
- * "scored this morning" — WHOOP scores once after waking, so a 2h window would
- * make every 10:30+/15:30/20:30 check-in permanently silent ("whoop not fresh").
+ * @param mode 'ritual' = the morning briefing (SCORED and <=2h old); 'checkin' =
+ * day-part nudges (SCORED and scored TODAY). WHOOP scores once after waking, so a
+ * 2h window would make every later check-in permanently silent, while the old
+ * 18h window let a yesterday-morning score pass as "today" late in the evening.
  */
-export async function assessWhoop(maxAgeHours = 2): Promise<WhoopAssessment> {
+export async function assessWhoop(mode: FreshnessMode = 'ritual'): Promise<WhoopAssessment> {
   let data: WhoopToday;
   try {
     data = await bridge.whoopToday();
@@ -54,9 +56,8 @@ export async function assessWhoop(maxAgeHours = 2): Promise<WhoopAssessment> {
 
   const recovery = data.recovery?.score ?? null;
   const strain = data.strain?.score ?? null;
-  const updatedAt = data.recovery?.metadata?.updated_at;
-  const scoreState = data.recovery?.metadata?.score_state;
-  const fresh = isFresh(updatedAt, maxAgeHours) && scoreState === 'SCORED';
+  const freshness = assessFreshness(data.recovery?.metadata, mode, config.tz);
+  const fresh = freshness.usable;
 
   return {
     ok: true,
@@ -66,7 +67,8 @@ export async function assessWhoop(maxAgeHours = 2): Promise<WhoopAssessment> {
     recovery,
     strain,
     data,
-    reason: fresh ? undefined : `stale or unscored (updated_at=${updatedAt}, state=${scoreState})`,
+    freshness,
+    reason: fresh ? undefined : freshness.label,
   };
 }
 

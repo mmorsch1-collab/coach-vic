@@ -26,7 +26,7 @@ export interface RitualResult {
 
 export async function runMorningRitual(opts: { force?: boolean } = {}): Promise<RitualResult> {
   const date = todayStr(config.tz);
-  const a = await assessWhoop();
+  const a = await assessWhoop('ritual');
   const whoopFresh = !!(a.ok && a.fresh);
 
   // Bridge down (fetch failed for a non-auth reason): nothing downstream will

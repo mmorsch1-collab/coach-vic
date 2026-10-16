@@ -11,6 +11,7 @@ import {
 import { invalidateSystemCache } from './systemPrompt.js';
 import { appendEntry, DB_FILES, type DbFile } from '../memory/databases.js';
 import { todayStr, calendarWeek, addDaysStr } from '../util/time.js';
+import { gateWhoopToday } from '../coaching/whoopFreshness.js';
 import { parseBodyCompSheet, weekOverWeek, weightTrend, cleanWithingsSummary, cleanWeightHistory } from '../coaching/bodyComp.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
@@ -30,8 +31,9 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'get_whoop_today',
     description:
-      "Today's WHOOP recovery, sleep, and strain. ALWAYS check recovery.metadata.updated_at " +
-      'freshness (within 2h) and score_state === "SCORED" before making coaching claims.',
+      "Today's WHOOP recovery, sleep, and strain, behind a hard freshness gate (SCORED and scored " +
+      'today). If the result has stale: true the numbers are withheld: say today\'s score is not ' +
+      'in yet and make NO recovery or readiness claims. Only freshness.status "fresh" is today\'s data.',
     input_schema: { type: 'object', properties: {} },
   },
   {
@@ -516,7 +518,8 @@ export async function executeTool(
   try {
     switch (name) {
       case 'get_whoop_today':
-        return json(await bridge.whoopToday());
+        // Hard freshness gate: stale data comes back labeled, with NO numbers to quote.
+        return json(gateWhoopToday(await bridge.whoopToday(), 'checkin', config.tz));
       case 'get_withings_latest':
         // Flat summary (weight + body comp merged) — better for the LLM than raw /latest.
         return json(cleanWithingsSummary(await bridge.withingsSummary()));

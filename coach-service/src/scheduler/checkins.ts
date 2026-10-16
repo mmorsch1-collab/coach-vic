@@ -50,9 +50,9 @@ async function composeNudge(intent: string, a: WhoopAssessment): Promise<string>
 type OpportunityFn = (a: WhoopAssessment) => string | null;
 
 async function runGenericCheckin(label: string, opp: OpportunityFn): Promise<CheckinResult> {
-  // 18h window: "recovery was scored this morning" is fresh enough for day-part
-  // nudges (the strict 2h window is only for the 5:15 ritual).
-  const a = await assessWhoop(18);
+  // Day-part nudges need a recovery SCORED TODAY (the strict 2h window is only for
+  // the morning ritual). A score from yesterday is stale — stay silent.
+  const a = await assessWhoop('checkin');
   if (!a.ok) return { sent: false, reason: a.reason ?? 'whoop unavailable' };
   if (!a.fresh) return { sent: false, reason: 'whoop not fresh' };
 

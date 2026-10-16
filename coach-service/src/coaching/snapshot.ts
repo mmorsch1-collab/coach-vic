@@ -2,6 +2,7 @@ import { bridge } from '../bridge/client.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { assessWhoop } from '../scheduler/gating.js';
+import { assessFreshness, STALE_LABEL } from './whoopFreshness.js';
 import {
   parseWorkoutDb,
   exerciseSeries,
@@ -62,7 +63,7 @@ export async function buildSnapshot(): Promise<string> {
     bridge.readSheet('BODY_COMPOSITION').catch(() => [] as unknown[][]),
     bridge.getGoals().catch(() => [] as unknown[]),
     bridge.listSheets().catch(() => [] as Array<{ title: string }>),
-    assessWhoop(2).catch(() => null),
+    assessWhoop('ritual').catch(() => null),
     bridge.withingsHistory(21).catch(() => [] as unknown),
   ]);
 
@@ -179,34 +180,18 @@ export async function buildSnapshot(): Promise<string> {
       strain: num(r['strain']),
     }));
 
-  // TODAY, from the live WHOOP API. Recovery coaching requires score_state ===
-  // SCORED and TODAY's score — never yesterday's.
-  //
-  // The <2h freshness gate is the MORNING-BRIEFING standard: WHOOP scores once
-  // after waking, so by mid-morning today's legitimately-scored recovery is
-  // always >2h old. Applying 2h all day would blank recovery coaching from ~2h
-  // after wake onward (the same trap gating.ts documents for the day-part
-  // check-ins). So: strict 2h through the briefing window (workout hour + 2,
-  // covering the 5:15-equivalent run and its fallback), SCORED + same-day after
-  // that, with the age stated so the coach can weigh it.
+  // TODAY, from the live WHOOP API, behind the hard freshness gate
+  // (whoopFreshness.ts): during the briefing window (through workout hour + 2) the
+  // recovery must be SCORED and <=2h old; after that, SCORED and scored TODAY.
+  // Anything else is labeled stale — it is never shown as today's numbers. (The
+  // old ±1-day check compared the bridge's request-time "date", so a 78.8h-old
+  // score passed as today.)
   {
-    const meta = whoopToday?.data?.recovery?.metadata;
-    const scored = meta?.score_state === 'SCORED';
-    const updatedAt = meta?.updated_at;
-    const ageH = updatedAt ? (Date.now() - Date.parse(updatedAt)) / 3_600_000 : NaN;
-    const whoopDate = whoopToday?.data?.date;
-    // WHOOP anchors its cycle date to UTC, so after ~8pm ET its "date" is
-    // already tomorrow's while our local date is still today. A strict equality
-    // check therefore blanked recovery coaching every evening. Accept ±1 day and
-    // let the SCORED + freshness checks do the real work of rejecting stale data.
-    const localToday = todayStr(config.tz);
-    const isToday =
-      !/^\d{4}-\d{2}-\d{2}$/.test(String(whoopDate)) ||
-      [localToday, addDaysStr(localToday, 1), addDaysStr(localToday, -1)].includes(String(whoopDate));
     const workoutHour = Number(config.workoutTime.split(':')[0]);
     const inBriefingWindow = hourInTz(config.tz) <= workoutHour + 2;
-    const freshEnough = inBriefingWindow ? Number.isFinite(ageH) && ageH <= 2 : true;
-    const usable = !!whoopToday?.ok && scored && isToday && freshEnough;
+    const fr = assessFreshness(whoopToday?.data?.recovery?.metadata, inBriefingWindow ? 'ritual' : 'checkin', config.tz);
+    const ageH = fr.ageHours ?? NaN;
+    const usable = !!whoopToday?.ok && fr.usable;
 
     if (usable) {
       const d = whoopToday!.data;
@@ -231,15 +216,9 @@ export async function buildSnapshot(): Promise<string> {
           `it returns. Only skip recovery coaching if that retry also fails.`,
       );
     } else {
-      const why = !whoopToday?.ok
-        ? (whoopToday?.reason ?? 'not authenticated')
-        : !scored
-          ? `score_state=${meta?.score_state ?? 'missing'} (not SCORED)`
-          : !isToday
-            ? `data is for ${whoopDate}, not today`
-            : `updated_at ${Number.isFinite(ageH) ? `${ageH.toFixed(1)}h` : 'unknown'} old (>2h at briefing time)`;
+      const why = !whoopToday?.ok ? `${STALE_LABEL} — ${whoopToday?.reason ?? 'not authenticated'}` : fr.label;
       lines.push(
-        `⚠ WHOOP today UNUSABLE — ${why}. SKIP RECOVERY COACHING ENTIRELY this session: no ` +
+        `⚠ WHOOP: ${why}. SKIP RECOVERY COACHING ENTIRELY this session: no ` +
           `recovery %, no readiness call, no "your HRV says…", no strain commentary. Never ` +
           `substitute yesterday's score for today's. Coach off logged performance instead, and ` +
           `if recovery is genuinely needed, say the data isn't in yet.`,
