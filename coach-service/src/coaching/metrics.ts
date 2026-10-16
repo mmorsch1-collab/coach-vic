@@ -112,14 +112,68 @@ export function unclassifiedExercises(logs: SetLog[]): string[] {
   return out;
 }
 
+/** One performed set: its own weight and reps (weight 0 = bodyweight/unloaded). */
+export interface SetEntry {
+  weight: number;
+  reps: number;
+}
+
 export interface SetLog {
   date: string; // YYYY-MM-DD
   session: string;
   exercise: string;
+  /** Weight of the TOP set (best per-set e1RM) — kept for display/back-compat. */
   weight: number;
-  reps: number[]; // per-set reps
+  /** Reps of EVERY set, in order (one entry per hard set). */
+  reps: number[];
+  /**
+   * Every set with its OWN weight. Drop sets, ramp-ups and mixed sequences are
+   * represented exactly; nothing is collapsed to one weight (2026-10-16).
+   */
+  sets: SetEntry[];
   notes?: string;
   rir?: number | null;
+}
+
+/**
+ * Per-set detail cell format: "185x6; 175x8; BWx12". Written to the
+ * WORKOUT_DATABASE `Set_Detail` column so a session with several weights round-
+ * trips without loss (the Weight_lbs + Set_1..6 columns can only hold one weight).
+ */
+export function formatSetDetail(sets: SetEntry[]): string {
+  return sets.map((s) => `${s.weight > 0 ? +s.weight.toFixed(2) : 'BW'}x${s.reps}`).join('; ');
+}
+
+const SET_TOKEN = /(BW|\d+(?:\.\d+)?)\s*(?:lbs?)?\s*[x×]\s*(\d+)/gi;
+
+export function parseSetDetail(text: string): SetEntry[] {
+  const out: SetEntry[] = [];
+  for (const m of String(text ?? '').matchAll(SET_TOKEN)) {
+    const weight = /bw/i.test(m[1]) ? 0 : Number(m[1]);
+    const reps = Number(m[2]);
+    if (Number.isFinite(weight) && weight >= 0 && Number.isFinite(reps) && reps > 0) out.push({ weight, reps });
+  }
+  return out;
+}
+
+/** The set with the highest e1RM (weight and reps from the SAME set). */
+export function topSet(sets: SetEntry[]): { set: SetEntry; e1rm: number } | null {
+  let best: { set: SetEntry; e1rm: number } | null = null;
+  for (const s of sets) {
+    const v = e1rm(s.weight, s.reps);
+    if (!best || v > best.e1rm) best = { set: s, e1rm: v };
+  }
+  return best;
+}
+
+/** Sets of a log, tolerating legacy-shaped logs that only carry weight + reps[]. */
+export function setsOf(l: Pick<SetLog, 'weight' | 'reps'> & { sets?: SetEntry[] }): SetEntry[] {
+  return l.sets && l.sets.length ? l.sets : (l.reps || []).map((reps) => ({ weight: l.weight, reps }));
+}
+
+/** Total volume load: Σ weight × reps over every set. */
+export function volumeLoad(sets: SetEntry[]): number {
+  return Math.round(sets.reduce((a, s) => a + s.weight * s.reps, 0) * 10) / 10;
 }
 
 /** Parse the WORKOUT_DATABASE 2D rows (with header) into typed set logs. */
@@ -132,23 +186,38 @@ export function parseWorkoutDb(rows: unknown[][]): SetLog[] {
   const di = col('date'), si = col('session'), ei = col('exercise'),
     wi = col('weight'), s1 = col('set_1'), s2 = col('set_2'), s3 = col('set_3'),
     s4 = col('set_4'), s5 = col('set_5'), s6 = col('set_6'),
-    ni = col('notes'), ri = col('rir');
+    ni = col('notes'), ri = col('rir'), dti = col('set_detail');
   const out: SetLog[] = [];
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r] || [];
     const ex = String(row[ei] ?? '').trim();
     const dateRaw = String(row[di] ?? '').trim();
     if (!ex || !/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) continue; // skip blanks/narrative rows
-    const reps = [s1, s2, s3, s4, s5, s6]
-      .map((i) => (i >= 0 ? Number(row[i]) : NaN))
-      .filter((n) => Number.isFinite(n) && n > 0);
+    const notes = ni >= 0 ? String(row[ni] ?? '') : '';
+    const colWeight = Number(row[wi]) || 0;
+
+    // 1) Per-set detail column (authoritative when present).
+    let sets = dti >= 0 ? parseSetDetail(String(row[dti] ?? '')) : [];
+    if (!sets.length) {
+      // 2) Legacy: one weight for the Set_N reps…
+      sets = [s1, s2, s3, s4, s5, s6]
+        .map((i) => (i >= 0 ? Number(row[i]) : NaN))
+        .filter((n) => Number.isFinite(n) && n > 0)
+        .map((reps) => ({ weight: colWeight, reps }));
+      // …plus off-weight sets the old ingest parked in Notes as "also: 50x10, 45x12".
+      // Those were real sets that never counted as volume or fed e1RM.
+      const also = /also:\s*([^|]*)/i.exec(notes);
+      if (also) sets.push(...parseSetDetail(also[1]));
+    }
+    const top = topSet(sets);
     out.push({
       date: dateRaw,
       session: String(row[si] ?? '').trim(),
       exercise: ex,
-      weight: Number(row[wi]) || 0,
-      reps,
-      notes: ni >= 0 ? String(row[ni] ?? '') : '',
+      weight: top ? top.set.weight : colWeight,
+      reps: sets.map((s) => s.reps),
+      sets,
+      notes,
       rir: ri >= 0 && row[ri] !== '' && row[ri] != null ? Number(row[ri]) : null,
     });
   }
@@ -157,26 +226,33 @@ export function parseWorkoutDb(rows: unknown[][]): SetLog[] {
 
 export interface SessionPoint {
   date: string;
+  /** Top set (best per-set e1RM): its weight and reps. */
   weight: number;
   topReps: number;
   topE1rm: number;
   rir?: number | null;
+  /** Number of sets and total volume load (Σ weight × reps) for the session. */
+  setCount?: number;
+  volume?: number;
 }
 
 /** Per-session best-set series for one exercise, oldest→newest. */
 export function exerciseSeries(logs: SetLog[], exercise: string): SessionPoint[] {
   const re = new RegExp(exercise.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
   return logs
-    .filter((l) => re.test(l.exercise) && l.reps.length)
+    .filter((l) => re.test(l.exercise) && setsOf(l).length)
     .map((l) => {
-      const best = l.reps.reduce(
-        (acc, reps) => {
-          const v = e1rm(l.weight, reps);
-          return v > acc.topE1rm ? { topReps: reps, topE1rm: v } : acc;
-        },
-        { topReps: 0, topE1rm: 0 },
-      );
-      return { date: l.date, weight: l.weight, topReps: best.topReps, topE1rm: Math.round(best.topE1rm * 10) / 10, rir: l.rir };
+      const sets = setsOf(l);
+      const best = topSet(sets)!;
+      return {
+        date: l.date,
+        weight: best.set.weight,
+        topReps: best.set.reps,
+        topE1rm: Math.round(best.e1rm * 10) / 10,
+        rir: l.rir,
+        setCount: sets.length,
+        volume: volumeLoad(sets),
+      };
     })
     .sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -192,7 +268,7 @@ export function bestE1rmBefore(logs: SetLog[], exercise: string, beforeDate: str
   for (const l of logs) {
     if (l.date >= beforeDate) continue;
     if (l.exercise.trim().toLowerCase() !== name) continue;
-    for (const r of l.reps) best = Math.max(best, e1rm(l.weight, r));
+    for (const st of setsOf(l)) best = Math.max(best, e1rm(st.weight, st.reps));
   }
   return Math.round(best * 10) / 10;
 }

@@ -17,10 +17,11 @@ import { bodyCompReviewStatus, completeBodyCompReview } from '../coaching/bodyCo
 import { parseBodyCompSheet, weekOverWeek, weightTrend, cleanWithingsSummary, cleanWeightHistory } from '../coaching/bodyComp.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
-import { e1rm, exerciseSeries, parseWorkoutDb, hardSetsInRange, sessionDatesInRange, slopePerWeek, progressionTarget, muscleOf, VOLUME_BANDS, bestE1rmBefore } from '../coaching/metrics.js';
+import { e1rm, exerciseSeries, parseWorkoutDb, hardSetsInRange, sessionDatesInRange, slopePerWeek, progressionTarget, muscleOf, VOLUME_BANDS, bestE1rmBefore, topSet, volumeLoad, formatSetDetail, type SetEntry } from '../coaching/metrics.js';
 import { invalidateSnapshot } from '../coaching/snapshot.js';
 import { logMeal, PROTEIN_TARGET_G } from '../coaching/nutrition.js';
-import { ingestWorkout, annotateCompletion } from '../coaching/workoutIngest.js';
+import { ingestWorkout, annotateCompletion, buildDbRow, ensureSetDetailColumn } from '../coaching/workoutIngest.js';
+import { planFromExercises, savePlan } from '../coaching/workoutPlan.js';
 import { classifyExercise } from '../coaching/exerciseClassification.js';
 import { logFeedback } from '../coaching/feedback.js';
 
@@ -237,7 +238,7 @@ export const TOOLS: Anthropic.Tool[] = [
     description:
       "Log a completed exercise into WORKOUT_DATABASE (the canonical progression history). Call " +
       "this whenever Matt reports what he actually did, so history accumulates and e1RM/progression " +
-      "compute correctly. e1RM is auto-computed. Include RIR (reps-in-reserve on the hardest set, " +
+      "compute correctly. Pass `sets` with each set's own weight when weights vary. e1RM is computed per set (best set wins). Include RIR (reps-in-reserve on the hardest set, " +
       "0=failure..4) when he gives it.",
     input_schema: {
       type: 'object',
@@ -245,7 +246,19 @@ export const TOOLS: Anthropic.Tool[] = [
         date: { type: 'string', description: 'YYYY-MM-DD (default today if omitted).' },
         session: { type: 'string', description: 'e.g. "Mon Chest".' },
         exercise: { type: 'string' },
-        weight: { type: 'number', description: 'Working weight in lbs.' },
+        sets: {
+          type: 'array',
+          description:
+            'PREFERRED: every set with its OWN weight and reps, in order — e.g. a drop set ' +
+            '[{weight:50,reps:10},{weight:40,reps:8}] or a ramp [{weight:135,reps:5},{weight:155,reps:5}]. ' +
+            'Use instead of weight + set1..set6 whenever weights differ between sets. weight 0 = bodyweight.',
+          items: {
+            type: 'object',
+            properties: { weight: { type: 'number' }, reps: { type: 'integer' } },
+            required: ['weight', 'reps'],
+          },
+        },
+        weight: { type: 'number', description: 'Legacy: one weight for all sets (lbs).' },
         set1: { type: 'number', description: 'Reps set 1.' },
         set2: { type: 'number', description: 'Reps set 2.' },
         set3: { type: 'number', description: 'Reps set 3.' },
@@ -255,7 +268,7 @@ export const TOOLS: Anthropic.Tool[] = [
         rir: { type: 'number', description: 'Reps in reserve on the hardest set (0-4).' },
         notes: { type: 'string' },
       },
-      required: ['exercise', 'weight'],
+      required: ['exercise'],
     },
   },
   {
@@ -277,7 +290,19 @@ export const TOOLS: Anthropic.Tool[] = [
             type: 'object',
             properties: {
               exercise: { type: 'string' },
-              weight: { type: 'number', description: 'Working weight in lbs.' },
+                sets: {
+                  type: 'array',
+                  description:
+                    'PREFERRED: every set with its OWN weight and reps, in order — e.g. a drop set ' +
+                    '[{weight:50,reps:10},{weight:40,reps:8}] or a ramp [{weight:135,reps:5},{weight:155,reps:5}]. ' +
+                    'Use instead of weight + set1..set6 whenever weights differ between sets. weight 0 = bodyweight.',
+                  items: {
+                    type: 'object',
+                    properties: { weight: { type: 'number' }, reps: { type: 'integer' } },
+                    required: ['weight', 'reps'],
+                  },
+                },
+              weight: { type: 'number', description: 'Legacy: one weight for all sets (lbs).' },
               set1: { type: 'number' },
               set2: { type: 'number' },
               set3: { type: 'number' },
@@ -287,7 +312,7 @@ export const TOOLS: Anthropic.Tool[] = [
               rir: { type: 'number', description: 'Reps in reserve, hardest set (0-4).' },
               notes: { type: 'string' },
             },
-            required: ['exercise', 'weight'],
+            required: ['exercise'],
           },
         },
       },
@@ -561,6 +586,9 @@ export async function executeTool(
           recovery: input.recovery != null ? String(input.recovery) : undefined,
           exercises: input.exercises ?? [],
         });
+        // Remember the plan so the filled sheet can be checked against it later
+        // (filled-but-unticked rows, ticked rows that differ — workoutPlan.ts).
+        await savePlan(input.date, planFromExercises(input.exercises ?? [])).catch(() => undefined);
         // Compute the ACTUAL per-muscle set count of the sheet just built, so the
         // numbers reported to Matt match what was created. Vic once said "10 leg
         // sets" while building 13 — this makes that impossible: report THESE.
@@ -660,29 +688,15 @@ export async function executeTool(
         return json(await bridge.deleteCalendarEvent(input.id));
       case 'log_set': {
         const date = input.date || todayStr(config.tz);
-        const reps = [input.set1, input.set2, input.set3, input.set4, input.set5, input.set6]
-          .map((n: any) => Number(n))
-          .filter((n) => Number.isFinite(n) && n > 0);
-        const topReps = reps.length ? Math.max(...reps) : 0;
-        const est = Math.round(e1rm(Number(input.weight) || 0, topReps) * 10) / 10;
+        const sets = setsFromInput(input);
+        if (!sets.length) return ok('No sets with reps provided — nothing logged.');
+        const row = buildDbRow({ date, session: input.session, exercise: input.exercise, sets, notes: input.notes, rir: input.rir });
+        const est = Number(row[9]) || 0;
         const prNote = await prCheckBefore(input.exercise, date, est);
-        await bridge.appendSheet('WORKOUT_DATABASE', [[
-          date,
-          input.session ?? '',
-          input.exercise,
-          Number(input.weight) || '',
-          input.set1 ?? '',
-          input.set2 ?? '',
-          input.set3 ?? '',
-          input.notes ?? '',
-          input.rir ?? '',
-          est || '',
-          input.set4 ?? '',
-          input.set5 ?? '',
-          input.set6 ?? '',
-        ]]);
+        await ensureSetDetailColumn();
+        await bridge.appendSheet('WORKOUT_DATABASE', [row]);
         invalidateSnapshot();
-        return ok(`Logged ${input.exercise} ${input.weight}lb ${reps.join('/')} (e1RM ${est}) to WORKOUT_DATABASE.${prNote}`);
+        return ok(`Logged ${input.exercise} ${describeSets(sets)} (e1RM ${est}) to WORKOUT_DATABASE.${prNote}`);
       }
       case 'log_workout': {
         const date = input.date || todayStr(config.tz);
@@ -690,30 +704,33 @@ export async function executeTool(
         if (!lifts.length) return ok('No lifts provided.');
         const prNotes: string[] = [];
         const rows = [];
+        const summary: string[] = [];
         for (const l of lifts) {
-          const reps = [l.set1, l.set2, l.set3, l.set4, l.set5, l.set6]
-            .map((n: any) => Number(n))
-            .filter((n: number) => Number.isFinite(n) && n > 0);
-          const top = reps.length ? Math.max(...reps) : 0;
-          const est = Math.round(e1rm(Number(l.weight) || 0, top) * 10) / 10;
-          const pr = await prCheckBefore(l.exercise, date, est);
+          const sets = setsFromInput(l);
+          if (!sets.length) continue;
+          const row = buildDbRow({ date, session: input.session, exercise: l.exercise, sets, notes: l.notes, rir: l.rir });
+          const pr = await prCheckBefore(l.exercise, date, Number(row[9]) || 0);
           if (pr) prNotes.push(pr.trim());
-          rows.push([date, input.session ?? '', l.exercise, Number(l.weight) || '', l.set1 ?? '', l.set2 ?? '', l.set3 ?? '', l.notes ?? '', l.rir ?? '', est || '', l.set4 ?? '', l.set5 ?? '', l.set6 ?? '']);
+          rows.push(row);
+          summary.push(`${l.exercise} ${describeSets(sets)}`);
         }
+        if (!rows.length) return ok('No sets with reps provided — nothing logged.');
+        await ensureSetDetailColumn();
         await bridge.appendSheet('WORKOUT_DATABASE', rows);
         invalidateSnapshot();
         return ok(
-          `Logged ${rows.length} lift(s) to WORKOUT_DATABASE for ${date}: ${lifts.map((l: any) => l.exercise).join(', ')}.` +
+          `Logged ${rows.length} lift(s) to WORKOUT_DATABASE for ${date}: ${summary.join('; ')}.` +
             (prNotes.length ? ` ${prNotes.join(' ')}` : ''),
         );
       }
       case 'ingest_workout': {
         const res = await ingestWorkout(input?.date);
         const prMsg = res.prs.length ? ` 🎉 PR: ${res.prs.join('; ')} — celebrate this with Matt!` : '';
+        const warnMsg = res.warnings.length ? ` ⚠ Sheet check: ${res.warnings.join(' ')}` : '';
         return ok(
-          res.added > 0
+          (res.added > 0
             ? `Imported ${res.added} exercise(s) into WORKOUT_DATABASE: ${res.exercises.join(', ')}${res.skipped ? ` (skipped ${res.skipped} already-logged)` : ''}.${prMsg}`
-            : `No new actuals to import${res.skipped ? ` (${res.skipped} already logged)` : ' (no filled sets found)'}.`,
+            : `No new actuals to import${res.skipped ? ` (${res.skipped} already logged)` : ' (no filled sets found)'}.`) + warnMsg,
         );
       }
       case 'log_meal': {
@@ -929,6 +946,35 @@ function clampDays(v: unknown, dflt: number): number {
   if (!Number.isFinite(n)) return dflt;
   return Math.min(31, Math.max(1, Math.round(n)));
 }
+
+/**
+ * Per-set input for log_set / log_workout. Preferred: `sets: [{weight, reps}]`
+ * (each set its own weight — drop sets, ramp-ups, mixed). Legacy: one `weight`
+ * with set1..set6 reps.
+ */
+function setsFromInput(x: any): SetEntry[] {
+  if (Array.isArray(x?.sets) && x.sets.length) {
+    return x.sets
+      .map((s: any) => ({
+        weight: /^bw$/i.test(String(s?.weight ?? '')) ? 0 : Math.max(0, Number(s?.weight) || 0),
+        reps: Math.round(Number(s?.reps)),
+      }))
+      .filter((s: SetEntry) => Number.isFinite(s.reps) && s.reps > 0 && s.reps <= 100);
+  }
+  const w = Math.max(0, Number(x?.weight) || 0);
+  return [x?.set1, x?.set2, x?.set3, x?.set4, x?.set5, x?.set6]
+    .map((n: any) => Number(n))
+    .filter((n: number) => Number.isFinite(n) && n > 0)
+    .map((reps: number) => ({ weight: w, reps }));
+}
+
+/** "4 sets, top 185×6, volume 3,790 lb (185×6, 175×8, …)". */
+function describeSets(sets: SetEntry[]): string {
+  const t = topSet(sets);
+  const top = t ? `${t.set.weight || 'BW'}×${t.set.reps}` : '?';
+  return `${sets.length} set(s), top ${top}, volume ${volumeLoad(sets).toLocaleString()} lb (${formatSetDetail(sets)})`;
+}
+
 
 /**
  * PR check at log time: compare a just-computed e1RM to the exercise's best

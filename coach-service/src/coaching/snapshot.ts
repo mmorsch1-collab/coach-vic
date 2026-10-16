@@ -23,6 +23,7 @@ import {
 import { todayProteinLine, proteinTrendLine } from './nutrition.js';
 import { parseBodyCompSheet, weightTrend, muscleSlope14 } from './bodyComp.js';
 import { bodyCompReviewStatus } from './bodyCompReview.js';
+import { sheetWarnings } from './workoutIngest.js';
 import { allFeedback, recentPain, summarizeMmc } from './feedback.js';
 import { calendarWeek, weekdayLabel, hourOfTimestamp, todayStr, hourInTz, addDaysStr } from '../util/time.js';
 
@@ -164,6 +165,14 @@ export async function buildSnapshot(): Promise<string> {
           `trained, say so explicitly rather than treating it as volume.`,
       );
     }
+  }
+
+  // ---- SHEET CHECK: today's sheet vs its plan (from the latest auto-ingest) ----
+  try {
+    const sw = await sheetWarnings(todayStr(config.tz));
+    if (sw.length) lines.push(`⚠ Today's workout sheet check: ${sw.join(' ')}`);
+  } catch {
+    /* best-effort */
   }
 
   // ---- Recovery / WHOOP ----

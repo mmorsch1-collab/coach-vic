@@ -2,7 +2,9 @@ import { bridge } from '../bridge/client.js';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { todayStr } from '../util/time.js';
-import { e1rm, parseWorkoutDb, bestE1rmBefore } from './metrics.js';
+import { e1rm, parseWorkoutDb, bestE1rmBefore, topSet, formatSetDetail, type SetEntry } from './metrics.js';
+import { checkSheetAgainstPlan, getPlan } from './workoutPlan.js';
+import { JsonStore } from '../state/jsonStore.js';
 import { invalidateSnapshot } from './snapshot.js';
 import { appendDailyLog } from '../memory/store.js';
 
@@ -19,7 +21,9 @@ import { appendDailyLog } from '../memory/store.js';
  *    filled (a plan can never pose as a completed set).
  *
  * WORKOUT_DATABASE column order (matches log_set/log_workout in llm/tools.ts):
- *   [date, session, exercise, weight, set1, set2, set3, notes, rir, e1rm, set4, set5, set6]
+ *   [date, session, exercise, weight, set1, set2, set3, notes, rir, e1rm, set4, set5, set6, set_detail]
+ * weight = TOP set (best per-set e1RM); set1..6 = reps of the first six sets in
+ * order; set_detail = EVERY set as "185x6; 175x8; 165x10" (authoritative).
  */
 
 const DB = 'WORKOUT_DATABASE';
@@ -120,7 +124,7 @@ export async function workoutSheetStatus(
 
 export async function ingestWorkout(
   date?: string,
-): Promise<{ added: number; skipped: number; exercises: string[]; prs: string[] }> {
+): Promise<{ added: number; skipped: number; exercises: string[]; prs: string[]; warnings: string[] }> {
   const d = date || todayStr(config.tz);
 
   let workout: ParsedWorkout;
@@ -128,7 +132,7 @@ export async function ingestWorkout(
     workout = (await bridge.getWorkout(d)) as ParsedWorkout;
   } catch (err) {
     logger.warn({ err, date: d }, 'ingestWorkout: no workout sheet to read');
-    return { added: 0, skipped: 0, exercises: [], prs: [] };
+    return { added: 0, skipped: 0, exercises: [], prs: [], warnings: [] };
   }
 
   const session = workout?.title ?? '';
@@ -145,6 +149,9 @@ export async function ingestWorkout(
 
   // Build one DB row per exercise that has at least one COMPLETED set
   // (Done-checked on checkbox sheets; filled Weight+Reps on legacy sheets).
+  // EVERY completed set is kept with its OWN weight (drop sets, ramp-ups, mixed
+  // sequences) — the old code kept only sets at the top weight and parked the
+  // rest in Notes as "also: …", so they never counted as volume (2026-10-16).
   const checkboxMode = hasCheckboxes(exercises);
   const candidates: Array<{ name: string; row: (string | number)[]; pr?: string }> = [];
   for (const ex of exercises) {
@@ -153,52 +160,25 @@ export async function ingestWorkout(
     const actuals = completedSetsOf(ex, checkboxMode);
     if (actuals.length === 0) continue; // not done — skip
 
-    // Top set = highest e1RM computed PER SET (weight and reps from the SAME set).
-    // Pairing the heaviest weight with the highest reps across different sets
-    // (e.g. 185x6 + 175x8 → "185x8") inflates e1RM and poisons progression.
-    let top = actuals[0];
-    let topE = e1rm(top.weight, top.reps);
-    for (const a of actuals) {
-      const e = e1rm(a.weight, a.reps);
-      if (e > topE) {
-        top = a;
-        topE = e;
-      }
-    }
-    const workingWeight = top.weight;
-    // Reps columns describe the working weight only; other-weight sets go to notes.
-    const reps = actuals.filter((a) => a.weight === workingWeight).map((a) => a.reps);
-    const offWeight = actuals.filter((a) => a.weight !== workingWeight);
-    const est = Math.round(topE * 10) / 10;
-
+    const row = buildDbRow({ date: d, session, exercise: name, sets: actuals });
+    const est = Number(row[9]) || 0;
     // PR check against all prior history (exact-name, per-set e1RM).
     const priorBest = bestE1rmBefore(priorLogs, name, d);
     const pr = priorBest > 0 && est > priorBest ? `${name}: e1RM ${est} (prev best ${priorBest})` : undefined;
-
-    candidates.push({
-      name,
-      pr,
-      row: [
-        d,
-        session,
-        name,
-        workingWeight,
-        reps[0] ?? '',
-        reps[1] ?? '',
-        reps[2] ?? '',
-        offWeight.length ? `also: ${offWeight.map((a) => `${a.weight}x${a.reps}`).join(', ')}` : '', // notes
-        '', // rir
-        est || '',
-        reps[3] ?? '', // Set_4..Set_6 (trailing columns)
-        reps[4] ?? '',
-        reps[5] ?? '',
-      ],
-    });
+    candidates.push({ name, pr, row });
   }
+
+  // Sheet-vs-plan check (filled-but-unticked rows, ticked rows that differ).
+  const warnings = checkboxMode
+    ? checkSheetAgainstPlan(exercises as any, await getPlan(d).catch(() => null), doneTruthy)
+    : [];
+  await recordSheetWarnings(d, warnings);
+  if (warnings.length) logger.warn({ date: d, warnings }, 'ingestWorkout: sheet differs from plan');
 
   if (candidates.length === 0) {
-    return { added: 0, skipped: 0, exercises: [], prs: [] };
+    return { added: 0, skipped: 0, exercises: [], prs: [], warnings };
   }
+  await ensureSetDetailColumn(dbRows);
 
   // UPSERT (not skip): map each existing Date+Exercise row to its 1-based sheet
   // row number. Re-ingesting UPDATES that row with the latest completed sets
@@ -235,8 +215,8 @@ export async function ingestWorkout(
     await bridge.appendSheet(DB, toAppend.map((c) => c.row));
   }
   for (const { rowNum, c } of toUpdate) {
-    // Column order is [A..M] = 13 columns; update just this row in place.
-    await bridge.updateSheetRange(DB, `A${rowNum}:M${rowNum}`, [c.row]).catch((err) =>
+    // Column order is [A..N] = 14 columns (N = Set_Detail); update just this row.
+    await bridge.updateSheetRange(DB, `A${rowNum}:N${rowNum}`, [c.row]).catch((err) =>
       logger.warn({ err, exercise: c.name, rowNum }, 'ingest: row update failed'),
     );
   }
@@ -252,5 +232,80 @@ export async function ingestWorkout(
     { date: d, added: toAppend.length, updated: toUpdate.length, exercises: exerciseNames, prs },
     'ingestWorkout complete',
   );
-  return { added: toAppend.length, skipped: toUpdate.length, exercises: exerciseNames, prs };
+  return { added: toAppend.length, skipped: toUpdate.length, exercises: exerciseNames, prs, warnings };
+}
+
+/**
+ * The single WORKOUT_DATABASE row builder (ingest, log_set, log_workout all use
+ * it), so every path stores per-set weights the same way.
+ */
+export function buildDbRow(p: {
+  date: string;
+  session?: string;
+  exercise: string;
+  sets: SetEntry[];
+  notes?: string;
+  rir?: number | string | null;
+}): (string | number)[] {
+  const sets = p.sets.filter((s) => Number.isFinite(s.reps) && s.reps > 0);
+  const top = topSet(sets);
+  const est = top ? Math.round(top.e1rm * 10) / 10 : 0;
+  const r = (i: number) => sets[i]?.reps ?? '';
+  return [
+    p.date,
+    p.session ?? '',
+    p.exercise,
+    top ? top.set.weight || '' : '',
+    r(0),
+    r(1),
+    r(2),
+    p.notes ?? '',
+    p.rir ?? '',
+    est || '',
+    r(3),
+    r(4),
+    r(5),
+    formatSetDetail(sets),
+  ];
+}
+
+let detailColumnEnsured = false;
+/**
+ * Add the Set_Detail header (column N) to WORKOUT_DATABASE once, if missing.
+ * Additive: existing columns and rows are untouched; old rows without detail
+ * are read through the legacy path (Weight_lbs + Set_1..6 + "also:" notes).
+ */
+export async function ensureSetDetailColumn(dbRows?: unknown[][]): Promise<void> {
+  if (detailColumnEnsured) return;
+  try {
+    const header = (dbRows?.[0] ?? ((await bridge.readSheet(DB, 'A1:N1')) as unknown[][])[0] ?? []) as unknown[];
+    const n = String(header[13] ?? '').trim();
+    if (!n) {
+      await bridge.updateSheetRange(DB, 'N1', [['Set_Detail']]);
+      logger.info('WORKOUT_DATABASE: added Set_Detail header (column N)');
+    } else if (n.toLowerCase() !== 'set_detail') {
+      logger.warn({ header: n }, 'WORKOUT_DATABASE column N is not Set_Detail; per-set detail may be misread');
+    }
+    detailColumnEnsured = true;
+  } catch (err) {
+    logger.warn({ err }, 'Could not verify the Set_Detail column');
+  }
+}
+
+const warningStore = new JsonStore<{ byDate: Record<string, string[]> }>('sheet-warnings.json', { byDate: {} });
+
+async function recordSheetWarnings(date: string, warnings: string[]): Promise<void> {
+  await warningStore
+    .update((s) => {
+      if (warnings.length) s.byDate[date] = warnings;
+      else delete s.byDate[date];
+      const keys = Object.keys(s.byDate).sort();
+      for (const k of keys.slice(0, Math.max(0, keys.length - 14))) delete s.byDate[k];
+    })
+    .catch(() => undefined);
+}
+
+/** Latest sheet-vs-plan warnings for a date (from the most recent ingest). */
+export async function sheetWarnings(date: string): Promise<string[]> {
+  return (await warningStore.read()).byDate[date] ?? [];
 }
