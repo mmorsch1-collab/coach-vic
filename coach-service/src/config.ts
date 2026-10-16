@@ -12,7 +12,7 @@ const packageRoot = path.resolve(__dirname, '..');
 const schema = z.object({
   anthropicApiKey: z.string().min(1, 'ANTHROPIC_API_KEY is required'),
   modelPrimary: z.string().default('claude-haiku-4-5'),
-  modelHeavy: z.string().default('claude-sonnet-4-6'),
+  modelHeavy: z.string().default('claude-sonnet-5-5'),
 
   telegramBotToken: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required'),
   telegramChatId: z.string().min(1, 'TELEGRAM_CHAT_ID is required'),

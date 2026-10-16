@@ -3,39 +3,26 @@ import { logger } from '../logger.js';
 import { isSkip } from './sentinel.js';
 import type { CheckinResult } from './checkins.js';
 import { bodyCompReviewStatus, completeBodyCompReview } from '../coaching/bodyCompReview.js';
-import { addDaysStr, todayStr } from '../util/time.js';
-import { config } from '../config.js';
 
 /**
- * Sunday weekly review — the one data-rich coaching message of the week. Pulls
- * the computed trends and produces progress + 1–2 concrete adjustments + the
- * detections (plateau, too-fast loss, muscle-loss, low adherence).
+ * Sunday weekly review — a short progress check-in. Matt only wants BF%, muscle
+ * retention/growth, strength gains (if any), and a recommendation for the coming
+ * week — no weight, no workout/PR detail, no data dump (2026-08-02).
  */
 export async function runWeeklyReview(): Promise<CheckinResult> {
-  const today = todayStr(config.tz);
-  const weekDates = Array.from({ length: 7 }, (_, i) => addDaysStr(today, -(7 - i))); // Sun..Sat
-
   const instruction = [
-    `Weekly review for Matt (Sunday). You have the COACHING SNAPSHOT in context. Use tools as needed:`,
-    `get_muscle_volume (weekly hard sets vs landmarks), get_bodycomp_trend (weight/BF% slope),`,
-    `get_whoop_history (recovery trend), get_exercise_progression for any key lift, get_goals.`,
+    `Weekly progress check-in for Matt (Sunday). Call get_bodycomp_trend for BF%/muscle-mass`,
+    `week-over-week averages (use the averages, not a single reading — they're the noise-smoothed`,
+    `numbers) and get_exercise_progression for his key lifts to see if any e1RM moved.`,
     ``,
-    `This week's daily logs exist for: ${weekDates.join(', ')}. Use recall_day on the 2-3 days that`,
-    `matter (training days, days Matt raised something) — or search_memory — so the review reflects`,
-    `what actually happened and was SAID this week, not just the numbers. Watch for [pr] lines`,
-    `(new e1RM PRs) and call them out by name.`,
+    `Write 2–3 short sentences covering exactly this, nothing else:`,
+    `1. BF% trend (this week's avg vs last week's avg).`,
+    `2. Muscle mass: retained, growing, or dropping (this week's avg vs last week's avg).`,
+    `3. Strength: only mention if a key lift's e1RM actually moved — skip entirely if flat.`,
+    `4. One concrete insight or recommendation for the coming week.`,
     ``,
-    `Assess and report concisely (this is the week's one data-rich message):`,
-    `1. Training: which lifts progressed (e1RM), which stalled (flag a plateau if e1RM flat 3+ sessions),`,
-    `   and whether weekly volume per muscle is in range (esp. chest ~10–16, legs maintenance).`,
-    `2. Body comp vs the cut rate (~0.5%/wk): on-track / too fast (>1%/wk → muscle risk, ease deficit) /`,
-    `   stalled (tighten or add a diet break). Check the strength-retention guardrail: e1RM trend vs`,
-    `   weight trend — if strength is falling while weight drops, flag muscle loss → eat more / end cut.`,
-    `3. Recovery + adherence: sessions vs target, recovery trend, sleep.`,
-    ``,
-    `Then write the message: 2–3 sentences of what's working (encourage with specifics), then 1–2`,
-    `concrete adjustments for next week, then one question. Coach voice — grounded, no data dump,`,
-    `no visible reasoning. If there's genuinely nothing worth a weekly message, reply exactly "SKIP".`,
+    `No weight, no workout/session detail, no PR play-by-play, no data dump, no visible reasoning.`,
+    `Coach voice — grounded and brief. If there's nothing worth reporting, reply exactly "SKIP".`,
   ].join('\n');
 
   // Monthly body-comp review: folded into the weekly review ONCE per 4-week window,
@@ -51,10 +38,10 @@ export async function runWeeklyReview(): Promise<CheckinResult> {
     const r = await runTurn({
       messages: [{ role: 'user', content: prompt }],
       sessionType: 'isolated',
-      retrievalQuery: 'weekly review progress plateau cut rate recovery adherence',
+      retrievalQuery: 'weekly review body fat muscle mass strength progress',
       tier: 'heavy',
-      maxTokens: 1200,
-      maxIterations: 12,
+      maxTokens: 400,
+      maxIterations: 8,
     });
     const message = r.text.trim();
     if (isSkip(message)) return { sent: false, reason: 'nothing worth a review' };

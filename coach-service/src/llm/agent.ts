@@ -139,9 +139,12 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         // Final allowed iteration: force a text answer so the turn's spend isn't
         // discarded as an empty reply when the model would rather keep tooling.
         ...(lastIteration ? { tool_choice: { type: 'none' as const } } : {}),
-        // Sonnet 4.6 defaults effort to 'high'; pin 'medium' to keep the 4.5-era
+        // Sonnet defaults effort to 'high'; pin 'medium' to keep the 4.5-era
         // latency/cost profile for short coaching turns. Never send to Haiku (400s).
-        ...(model.includes('sonnet-4-6') ? { output_config: { effort: 'medium' } } : {}),
+        ...(model.includes('sonnet') ? { output_config: { effort: 'medium' } } : {}),
+        // Sonnet 5.5 thinks by default (and 400s on thinking 'disabled'); 'between_tools'
+        // keeps the no-thinking 4.6 behavior so thinking doesn't eat the small max_tokens.
+        ...(model.includes('sonnet-5-5') ? { thinking: { type: 'between_tools' } } : {}),
         // Cast: the pinned SDK (0.40.1) predates the `ttl` field, output_config,
         // and tool_choice 'none' in its types; the API accepts all (smoke-tested).
       } as any);
