@@ -18,8 +18,8 @@ export class WithingsAuthService {
   // Scopes for Withings data access
   private readonly SCOPES = [
     'user.info', // Basic user information
-    'user.metrics', // Weight, body composition measurements
-    'user.activity', // Activity data (optional)
+    'user.metrics', // Weight, body composition measurements (read-only)
+    // user.activity dropped (2026-10-16): nothing reads activity data.
   ];
 
   /**

@@ -13,9 +13,20 @@ import { withRefreshLock, isInvalidGrantError, RetryableRefreshError } from './r
 export class GoogleAuthService {
   private oauth2Client: OAuth2Client;
 
-  // Scopes for calendar (read/write) and sheets access
+  // Least privilege (2026-10-16). Was the full `calendar` scope (which can also
+  // delete calendars, change sharing/ACLs and settings). Now:
+  //  - calendar.events: create/edit the workout blocks + read events (all we do)
+  //  - calendar.calendarlist.readonly: list calendars for the /calendar/today merge
+  //  - spreadsheets: Google offers NO per-file scope for an existing sheet the app
+  //    didn't create (drive.file only covers app-created/picker files), so this
+  //    stays — and is confined in code instead: the only spreadsheet id is
+  //    GOOGLE_SHEET_ID from config (no endpoint accepts one) and tab access is
+  //    allowlisted (validation/sheetAccess.ts).
+  // Takes effect at the next consent (/auth/google/start); existing tokens keep
+  // their old grant until then.
   private readonly SCOPES = [
-    'https://www.googleapis.com/auth/calendar', // Full calendar access (read + write)
+    'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
     'https://www.googleapis.com/auth/spreadsheets',
   ];
 

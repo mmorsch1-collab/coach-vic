@@ -20,7 +20,7 @@ export class StravaAuthService {
     'read', // Read public segments, public routes, public profile data, public posts, public events, club feeds
     'activity:read', // Read the user's activity data for activities that are visible
     'activity:read_all', // Read the user's activity data for all activities
-    'profile:read_all', // Read all profile information (including private)
+    // profile:read_all dropped (2026-10-16): only /athlete (public profile) is read.
   ];
 
   /**

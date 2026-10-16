@@ -231,6 +231,13 @@ export class BridgeClient {
       { data },
     );
   }
+  /** Background token-refresh health per provider (no token material). */
+  refreshStatus() {
+    return this.request<Record<string, { consecutiveFailures: number; lastError?: string; lastFailureAt?: string }>>(
+      'GET',
+      '/auth/refresh-status',
+    );
+  }
   health() {
     return this.request<{ ok: boolean }>('GET', '/health');
   }

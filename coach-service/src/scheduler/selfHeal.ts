@@ -46,6 +46,9 @@ const ALERT_COOLDOWN_MIN = 24 * 60; // one alert per issue per day
  */
 const TRANSIENT_STREAK_ALERT = 3;
 
+/** Background refresh runs every 30 min: 2 straight failures ≈ an hour of a dying token. */
+const REFRESH_FAIL_ALERT = 2;
+
 // Strava intentionally omitted: their API changed (paid access now required) and
 // nothing in the coaching path reads Strava, so probing it only produced hourly
 // errors and would now trip the persistent-failure escalation forever. Dropped
@@ -138,5 +141,26 @@ export async function runSelfHeal(deliver: (text: string) => Promise<void>): Pro
         logger.info({ provider: p.key, streak, err: msg }, 'Self-heal: transient probe failure');
       }
     }
+  }
+
+  // 3. Background token refresh failing? A refresh that keeps failing is a token
+  //    about to die — alert BEFORE it does, instead of letting it fail silently.
+  try {
+    const rs = await bridge.refreshStatus();
+    for (const p of PROVIDERS) {
+      const st = rs?.[p.key];
+      if (st && st.consecutiveFailures >= REFRESH_FAIL_ALERT) {
+        logger.error({ provider: p.key, failures: st.consecutiveFailures }, 'Self-heal: token refresh failing');
+        await alertOnce(
+          deliver,
+          `${p.key}-refresh`,
+          `⚠️ ${p.name} token refresh has failed ${st.consecutiveFailures} times in a row — the connection ` +
+            `will drop soon. Reconnect to be safe:
+${authUrl(p.key)}`,
+        );
+      }
+    }
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, 'Self-heal: could not read refresh status');
   }
 }

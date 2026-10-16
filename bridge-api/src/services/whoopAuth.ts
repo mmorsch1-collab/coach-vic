@@ -21,8 +21,7 @@ export class WhoopAuthService {
     'read:recovery',
     'read:cycles',
     'read:sleep',
-    'read:workout',
-    'read:profile',
+    // read:workout / read:profile dropped (2026-10-16): no endpoint uses them.
   ];
 
   /**

@@ -7,6 +7,7 @@ import { stravaAuth } from '../services/stravaAuth.js';
 import { logger } from '../logger.js';
 import { SuccessResponse } from '../types.js';
 import { consumeOAuthState } from '../middleware/security.js';
+import { getRefreshStatus } from '../services/tokenRefresh.js';
 
 const router = Router();
 
@@ -64,7 +65,7 @@ router.get(
       <body>
         <div class="container">
           <h1>🔐 Google OAuth</h1>
-          <p>Click below to authorize Bridge API to access your Google Calendar (read-only).</p>
+          <p>Click below to authorize Bridge API to manage events on your Google Calendar and edit your coaching spreadsheet.</p>
           <a href="${authUrl}" class="btn">Connect Google Account</a>
         </div>
       </body>
@@ -999,5 +1000,13 @@ router.post(
     res.json(response);
   })
 );
+
+/**
+ * GET /auth/refresh-status — background token-refresh health per provider.
+ * Requires X-Bridge-Key (not a public route). Never returns token material.
+ */
+router.get('/refresh-status', (_req: Request, res: Response) => {
+  res.json({ success: true, data: getRefreshStatus() });
+});
 
 export default router;

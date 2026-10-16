@@ -10,6 +10,40 @@ import { tokenStorage } from '../storage/tokenStorage.js';
  * Runs periodically to refresh OAuth tokens before they expire
  * This prevents token expiration errors when Coach Vic makes requests
  */
+/**
+ * Per-provider outcome of the BACKGROUND refresh (2026-10-16). Failures used to
+ * be logged and nothing else, so a refresh that kept failing was invisible
+ * until a data call broke. Exposed (key-protected) at GET /auth/refresh-status;
+ * coach-service self-heal alerts on consecutive failures.
+ */
+export interface RefreshStatus {
+  lastSuccessAt?: string;
+  lastFailureAt?: string;
+  lastError?: string;
+  consecutiveFailures: number;
+}
+type Provider = 'google' | 'strava' | 'whoop' | 'withings';
+const status: Record<Provider, RefreshStatus> = {
+  google: { consecutiveFailures: 0 },
+  strava: { consecutiveFailures: 0 },
+  whoop: { consecutiveFailures: 0 },
+  withings: { consecutiveFailures: 0 },
+};
+export function getRefreshStatus(): Record<Provider, RefreshStatus> {
+  return JSON.parse(JSON.stringify(status));
+}
+function recordOk(p: Provider) {
+  status[p] = { ...status[p], lastSuccessAt: new Date().toISOString(), consecutiveFailures: 0, lastError: undefined };
+}
+function recordFail(p: Provider, err: any) {
+  status[p] = {
+    ...status[p],
+    lastFailureAt: new Date().toISOString(),
+    lastError: String(err?.message ?? err).slice(0, 200),
+    consecutiveFailures: status[p].consecutiveFailures + 1,
+  };
+}
+
 export class TokenRefreshService {
   private intervalId: NodeJS.Timeout | null = null;
   private bootTimeoutId: NodeJS.Timeout | null = null;
@@ -98,11 +132,13 @@ export class TokenRefreshService {
         logger.info('Google token expiring soon, refreshing');
         await googleAuth.getAuthenticatedClient(); // This triggers auto-refresh
         logger.info('Google token refreshed successfully');
+        recordOk('google');
       } else {
         logger.debug('Google token still valid, no refresh needed');
       }
     } catch (error: any) {
       logger.error({ err: error }, 'Failed to refresh Google token');
+      recordFail('google', error);
     }
   }
 
@@ -122,11 +158,13 @@ export class TokenRefreshService {
         logger.info('Strava token expiring soon, refreshing');
         await stravaAuth.refreshAccessToken();
         logger.info('Strava token refreshed successfully');
+        recordOk('strava');
       } else {
         logger.debug('Strava token still valid, no refresh needed');
       }
     } catch (error: any) {
       logger.error({ err: error }, 'Failed to refresh Strava token');
+      recordFail('strava', error);
     }
   }
 
@@ -146,11 +184,13 @@ export class TokenRefreshService {
         logger.info('WHOOP token expiring soon, refreshing');
         await whoopAuth.refreshAccessToken();
         logger.info('WHOOP token refreshed successfully');
+        recordOk('whoop');
       } else {
         logger.debug('WHOOP token still valid, no refresh needed');
       }
     } catch (error: any) {
       logger.error({ err: error }, 'Failed to refresh WHOOP token');
+      recordFail('whoop', error);
     }
   }
 
@@ -170,11 +210,13 @@ export class TokenRefreshService {
         logger.info('Withings token expiring soon, refreshing');
         await withingsAuth.refreshAccessToken();
         logger.info('Withings token refreshed successfully');
+        recordOk('withings');
       } else {
         logger.debug('Withings token still valid, no refresh needed');
       }
     } catch (error: any) {
       logger.error({ err: error }, 'Failed to refresh Withings token');
+      recordFail('withings', error);
     }
   }
 
