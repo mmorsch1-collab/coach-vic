@@ -1,4 +1,5 @@
 import { runTurn } from '../llm/agent.js';
+import { runAsUserTurn } from '../llm/turnContext.js';
 import { mainSession } from '../session/session.js';
 import { appendDailyLog } from '../memory/store.js';
 import { todayStr } from '../util/time.js';
@@ -43,7 +44,8 @@ export async function handleUserMessage(
   const tag = opts.retry ? '[matt:retry-after-failure]' : '[matt]';
   await appendDailyLog(todayStr(config.tz), `${tag} ${image ? `[photo] ${text}`.trim() : text}`);
 
-  const result = await runTurn({
+  // Mark this as a turn Matt started (turnContext.ts): only these may self-edit.
+  const result = await runAsUserTurn(text, () => runTurn({
     messages,
     sessionType: 'main',
     retrievalQuery: buildRetrievalQuery(history, text),
@@ -56,7 +58,7 @@ export async function handleUserMessage(
     // actually generated, so ordinary short replies are unaffected.
     maxTokens: 4096,
     maxIterations: 8,
-  });
+  }));
 
   const reply = result.text.trim() || "I'm here — give me a second and try that again.";
 

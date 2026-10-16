@@ -8,7 +8,8 @@ import { logger } from '../logger.js';
 /**
  * Scheduled memory maintenance (the "memory maintenance during heartbeats" loop):
  * review the daily logs and distill durable items into the RAG databases /
- * MEMORY.md via tools. Runs in main session so it may touch MEMORY.md.
+ * MEMORY.md via tools. Runs ISOLATED: it is a scheduled job, so it neither
+ * loads nor writes MEMORY.md (main-chat only, 2026-10-16).
  *
  * Catch-up semantics: a persisted cursor tracks the last successfully curated
  * COMPLETED day. Each run curates every un-curated day up to yesterday (capped),
@@ -36,7 +37,6 @@ async function curateDay(date: string): Promise<void> {
     `- interventions that clearly worked/failed → COACHING_INSIGHTS_DATABASE.md`,
     `- new lasting context about Matt → CONTEXTUAL_MEMORY_DATABASE.md`,
     `- measurable trends → PERFORMANCE_PATTERNS_DATABASE.md`,
-    `- a one-line distilled fact → update_long_term_memory (only if genuinely lasting).`,
     `Be conservative: skip transient noise and anything already in the databases.`,
     `Do NOT message Matt. When done, reply "done".`,
     ``,
@@ -45,7 +45,9 @@ async function curateDay(date: string): Promise<void> {
 
   await runTurn({
     messages: [{ role: 'user', content: instruction }],
-    sessionType: 'main',
+    // Isolated: MEMORY.md is main-chat only, and a log that quotes tool output must
+    // not be able to edit rules or long-term memory from a scheduled job.
+    sessionType: 'isolated',
     tier: 'primary',
     maxTokens: 600,
     maxIterations: 8,

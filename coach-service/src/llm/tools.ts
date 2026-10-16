@@ -12,6 +12,7 @@ import { invalidateSystemCache } from './systemPrompt.js';
 import { appendEntry, DB_FILES, type DbFile } from '../memory/databases.js';
 import { todayStr, calendarWeek, addDaysStr } from '../util/time.js';
 import { gateWhoopToday } from '../coaching/whoopFreshness.js';
+import { canSelfEdit, currentTurn, untrusted } from './turnContext.js';
 import { bodyCompReviewStatus, completeBodyCompReview } from '../coaching/bodyCompReview.js';
 import { parseBodyCompSheet, weekOverWeek, weightTrend, cleanWithingsSummary, cleanWeightHistory } from '../coaching/bodyComp.js';
 import { config } from '../config.js';
@@ -536,9 +537,10 @@ export async function executeTool(
       case 'get_withings_history':
         return json(cleanWeightHistory(await bridge.withingsHistory(clampDays(input?.days, 7))));
       case 'get_strava_latest':
-        return json(await bridge.stravaLatest());
+        return untrusted('Strava', await bridge.stravaLatest());
+      // Calendar titles/descriptions are written by anyone who invites Matt: untrusted.
       case 'get_calendar_today':
-        return json(await bridge.calendarToday());
+        return untrusted('Google Calendar', await bridge.calendarToday());
       case 'create_calendar_event':
         return json(
           await bridge.createCalendarEvent({
@@ -620,24 +622,24 @@ export async function executeTool(
       case 'save_whoop_snapshot':
         return json(await bridge.whoopSnapshot(input));
       case 'get_goals':
-        return json(await bridge.getGoals());
+        return untrusted('Goals sheet', await bridge.getGoals());
       case 'get_workout':
         // Per-set `completed` under the sheet's contract (Done checkbox on current
         // sheets; filled Weight+Reps on legacy ones) — raw `done` is stripped.
-        return json(annotateCompletion(await bridge.getWorkout(input.date)));
+        return untrusted(`Workout_${input.date} sheet`, annotateCompletion(await bridge.getWorkout(input.date)));
       case 'list_sheets':
-        return json(await bridge.listSheets());
+        return untrusted('spreadsheet tab list', await bridge.listSheets());
       case 'read_sheet': {
         const rows = (await bridge.readSheet(input.title, input.range)) as unknown[][];
         // Unbounded raw dumps (esp. WORKOUT_DATABASE) grow forever and are re-billed
         // every loop iteration. With no explicit range, cap to header + last 50 rows.
         if (!input.range && Array.isArray(rows) && rows.length > 60) {
-          return json({
+          return untrusted(`sheet ${input.title}`, {
             note: `Truncated: showing header + last 50 of ${rows.length} rows. Pass a range for more, or use get_exercise_progression / get_muscle_volume for history.`,
             rows: [rows[0], ...rows.slice(-50)],
           });
         }
-        return json(rows);
+        return untrusted(`sheet ${input.title}`, rows);
       }
       case 'update_sheet_range':
         return json(await bridge.updateSheetRange(input.title, input.range, input.data ?? []));
@@ -868,16 +870,21 @@ export async function executeTool(
         if (!log.trim()) return ok(`No daily log exists for ${d}.`);
         // Tail-cap: a chatty day's full transcript can be thousands of tokens.
         const capped = log.length > 8000 ? `(…earlier truncated)\n${log.slice(-8000)}` : log;
-        return json({ date: d, log: capped });
+        return untrusted(`daily log ${d}`, { date: d, log: capped });
       }
       case 'search_memory': {
         const hits = await searchDailyLogs(String(input.query ?? ''));
         return hits
-          ? json({ matches: hits })
+          ? untrusted('daily logs', { matches: hits })
           : ok('No matching lines in the daily logs (try fewer/different keywords).');
       }
       case 'update_coaching_rule': {
-        if (ctx.sessionType !== 'main') return ok('Rule edits are only allowed in private chat.');
+        {
+          // Only Matt's own message can change the rules — never text from a tool
+          // result, calendar event, sheet cell, or a scheduled job (turnContext.ts).
+          const gate = canSelfEdit(ctx.sessionType, currentTurn());
+          if (!gate.allowed) return ok(`Rule edit refused: ${gate.reason}.`);
+        }
         const res = await editBrainFile(input.file, {
           append: input.append,
           find: input.find,
@@ -894,7 +901,10 @@ export async function executeTool(
         return json(res);
       }
       case 'update_long_term_memory':
-        if (ctx.sessionType !== 'main') return ok('Skipped: long-term memory is main-session only.');
+        {
+          const gate = canSelfEdit(ctx.sessionType, currentTurn());
+          if (!gate.allowed) return ok(`Skipped: MEMORY.md is written only when Matt asks in chat (${gate.reason}).`);
+        }
         await appendMemoryMd(input.line);
         return ok('MEMORY.md updated.');
       default:
