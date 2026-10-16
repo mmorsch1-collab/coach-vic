@@ -17,6 +17,7 @@ import { syncWhoopSnapshot } from './whoopSync.js';
 import { runDailyClose } from './dailyClose.js';
 import { ingestWorkout } from '../coaching/workoutIngest.js';
 import { runCostReport } from './costReport.js';
+import { finalizeProactive } from '../delivery/lint.js';
 
 /**
  * Registers all scheduled jobs (the ported OpenClaw cron set). Each job decides
@@ -44,7 +45,20 @@ const costReportState = new JsonStore<{ sent: boolean }>('cost-report-state.json
 const tzOpt = { timezone: config.tz } as const;
 
 /** Returns true if the message was actually reserved + delivered. */
-async function emit(type: string, message: string, deps: JobDeps, opts = {}): Promise<boolean> {
+async function emit(type: string, draft: string, deps: JobDeps, opts = {}): Promise<boolean> {
+  // Pre-send lint (delivery/lint.ts): no working/calculation language, no
+  // self-corrections, no data dumps, no meal/protein solicitation, lead with the
+  // recommendation. One rewrite attempt, else suppressed. Runs BEFORE reserving a
+  // slot so a suppressed draft doesn't consume the daily cap.
+  const message = await finalizeProactive(type, draft, {
+    // The briefing carries the sheet link + the plan, so it gets more room.
+    maxChars: type === 'morning-briefing' ? 1200 : 700,
+    maxNumbers: type === 'morning-briefing' ? 12 : 8,
+  });
+  if (!message) {
+    logger.warn({ type }, 'Proactive message suppressed by pre-send lint');
+    return false;
+  }
   const gate = await tryReserveProactive(type, opts);
   if (!gate.allowed) {
     logger.info({ type, reason: gate.reason }, 'Proactive message suppressed by gate');
