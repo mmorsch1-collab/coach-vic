@@ -6,6 +6,13 @@ import { logger } from '../logger.js';
 
 const router = Router();
 
+/** Parse an untrusted integer query param: default when absent/invalid, clamped to [min, max]. */
+function clampInt(v: unknown, dflt: number, min: number, max: number): number {
+  const n = typeof v === 'string' && /^-?\d{1,12}$/.test(v) ? parseInt(v, 10) : NaN;
+  if (!Number.isFinite(n)) return dflt;
+  return Math.min(max, Math.max(min, n));
+}
+
 // Withings measurement types
 // See: https://developer.withings.com/api-reference/#tag/measure
 enum MeasureType {
@@ -333,13 +340,10 @@ router.get(
 
     try {
       // Get measurements (default: last 30 days, most recent first)
-      const limit = parseInt(req.query.limit as string) || 10;
-      const startDate = req.query.startdate
-        ? parseInt(req.query.startdate as string)
-        : Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60; // 30 days ago
-      const endDate = req.query.enddate
-        ? parseInt(req.query.enddate as string)
-        : Math.floor(Date.now() / 1000);
+      const limit = clampInt(req.query.limit, 10, 1, 100);
+      const nowSec = Math.floor(Date.now() / 1000);
+      const endDate = clampInt(req.query.enddate, nowSec, 0, nowSec + 86_400);
+      const startDate = clampInt(req.query.startdate, endDate - 30 * 86_400, 0, endDate);
 
       const measureData = await withingsAuth.makeApiRequest<WithingsMeasureResponse>(
         'getmeas',
@@ -496,7 +500,7 @@ router.get(
     }
 
     try {
-      const days = parseInt(req.query.days as string) || 90;
+      const days = clampInt(req.query.days, 90, 1, 365);
       const startDate = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;
 
       const measureData = await withingsAuth.makeApiRequest<WithingsMeasureResponse>(

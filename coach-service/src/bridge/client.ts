@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 
@@ -63,6 +66,28 @@ export class BridgeError extends Error {
   }
 }
 
+/**
+ * Bridge API key (the bridge requires X-Bridge-Key on every data endpoint).
+ * BRIDGE_API_KEY env, else the key file the bridge generates on first start
+ * (BRIDGE_API_KEY_FILE, default ../bridge-api/.bridge-key). Read lazily and
+ * cached once found, so start order between the two services doesn't matter.
+ */
+let cachedKey: string | null = null;
+function bridgeKey(): string | null {
+  if (cachedKey) return cachedKey;
+  const env = process.env.BRIDGE_API_KEY?.trim();
+  if (env) return (cachedKey = env);
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const file = process.env.BRIDGE_API_KEY_FILE || path.resolve(root, '..', 'bridge-api', '.bridge-key');
+  try {
+    const k = fs.readFileSync(file, 'utf8').trim();
+    if (k) cachedKey = k;
+  } catch {
+    /* not generated yet — request will 401 and be retried later */
+  }
+  return cachedKey;
+}
+
 export class BridgeClient {
   constructor(private readonly baseUrl: string = config.bridgeUrl) {}
 
@@ -72,7 +97,10 @@ export class BridgeClient {
     try {
       res = await fetch(url, {
         method,
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        headers: {
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+          ...(bridgeKey() ? { 'X-Bridge-Key': bridgeKey() as string } : {}),
+        },
         body: body ? JSON.stringify(body) : undefined,
         signal: AbortSignal.timeout(20_000),
       });
@@ -90,6 +118,7 @@ export class BridgeClient {
     if (!res.ok || json?.success === false) {
       const code = json?.error?.code || `HTTP_${res.status}`;
       const msg = json?.error?.message || `Bridge ${method} ${pathName} failed (${res.status})`;
+      if (code === 'UNAUTHORIZED') cachedKey = null; // key rotated? re-read next time
       throw new BridgeError(msg, code, res.status);
     }
     return (json?.data ?? json) as T;
@@ -213,6 +242,9 @@ export const bridge = new BridgeClient();
 export function isAuthError(err: unknown): boolean {
   return (
     err instanceof BridgeError &&
+    // A provider auth failure — NOT a bridge-key rejection (code UNAUTHORIZED),
+    // which would otherwise surface as a bogus "WHOOP disconnected" alert.
+    err.code !== 'UNAUTHORIZED' &&
     (err.code === 'NOT_AUTHENTICATED' || err.code === 'TOKEN_EXPIRED' || err.status === 401)
   );
 }

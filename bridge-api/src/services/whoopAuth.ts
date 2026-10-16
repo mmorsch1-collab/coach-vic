@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
+import { issueOAuthState } from '../middleware/security.js';
 import { tokenStorage, TokenData } from '../storage/tokenStorage.js';
 import { withRefreshLock, isInvalidGrantError, RetryableRefreshError } from './refreshGuard.js';
 
@@ -33,19 +34,12 @@ export class WhoopAuthService {
       redirect_uri: config.whoop.redirectUri,
       response_type: 'code',
       scope: this.SCOPES.join(' '),
-      state: this.generateState(),
+      state: issueOAuthState('whoop'), // single-use, verified on callback
     });
 
     const url = `${this.WHOOP_AUTH_URL}?${params.toString()}`;
     logger.debug({ url }, 'Generated WHOOP OAuth authorization URL');
     return url;
-  }
-
-  /**
-   * Generate random state parameter for CSRF protection
-   */
-  private generateState(): string {
-    return Math.random().toString(36).substring(2, 15);
   }
 
   /**

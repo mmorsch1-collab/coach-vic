@@ -11,13 +11,30 @@ import authRouter from './routes/auth.js';
 import coachingRouter from './routes/coaching.js';
 import withingsRouter from './routes/withings.js';
 import stravaRouter from './routes/strava.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { hostGuard, rateLimit, requireApiKey, resolveApiKey } from './middleware/security.js';
 
 const app = express();
 
+// bridge-api package root (src/ or dist/ → one level up) — home of .bridge-key.
+const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+// Security first (middleware/security.ts): loopback Host only, rate limit, then
+// an API key on every route except the human-opened OAuth pages and /health.
+app.use(hostGuard());
+app.use(
+  rateLimit({
+    windowMs: 60_000,
+    max: Number(process.env.BRIDGE_RATE_LIMIT_PER_MIN) || 300,
+  })
+);
+app.use(createRequestLogger());
+app.use(requireApiKey(resolveApiKey(packageRoot)));
+
 // Middleware
 app.use(compression()); // Compress responses (60-80% size reduction)
-app.use(express.json());
-app.use(createRequestLogger());
+app.use(express.json({ limit: '1mb' }));
 
 // Disable x-powered-by header for security
 app.disable('x-powered-by');

@@ -3,6 +3,7 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { SuccessResponse } from '../types.js';
 import { whoopAuth } from '../services/whoopAuth.js';
 import { logger } from '../logger.js';
+import { isRealDate } from '../validation/sheetAccess.js';
 
 const router = Router();
 
@@ -351,8 +352,12 @@ router.get(
     }
     const start = String(req.query.start ?? '');
     const end = String(req.query.end ?? '');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+    if (!isRealDate(start) || !isRealDate(end)) {
       throw new AppError(400, 'start and end must be YYYY-MM-DD', 'BAD_RANGE');
+    }
+    const spanDays = (Date.parse(end) - Date.parse(start)) / 86_400_000;
+    if (spanDays < 0 || spanDays > 400) {
+      throw new AppError(400, 'end must be on/after start and the range at most 400 days', 'BAD_RANGE');
     }
     const startISO = new Date(`${start}T00:00:00Z`).toISOString();
     const endISO = new Date(`${end}T23:59:59Z`).toISOString();

@@ -6,6 +6,7 @@ import { withingsAuth } from '../services/withingsAuth.js';
 import { stravaAuth } from '../services/stravaAuth.js';
 import { logger } from '../logger.js';
 import { SuccessResponse } from '../types.js';
+import { consumeOAuthState } from '../middleware/security.js';
 
 const router = Router();
 
@@ -127,6 +128,11 @@ router.get(
     // Validate authorization code
     if (!code || typeof code !== 'string') {
       throw new AppError(400, 'Missing or invalid authorization code', 'INVALID_CODE');
+    }
+
+    // CSRF: the state must be one we issued from /auth/google/start, unused and unexpired.
+    if (!consumeOAuthState('google', req.query.state)) {
+      throw new AppError(400, 'Invalid or expired OAuth state. Start again from /auth/google/start', 'INVALID_STATE');
     }
 
     logger.info('Received OAuth callback, exchanging code for tokens');
@@ -352,6 +358,11 @@ router.get(
     // Validate authorization code
     if (!code || typeof code !== 'string') {
       throw new AppError(400, 'Missing or invalid authorization code', 'INVALID_CODE');
+    }
+
+    // CSRF: the state must be one we issued from /auth/whoop/start, unused and unexpired.
+    if (!consumeOAuthState('whoop', req.query.state)) {
+      throw new AppError(400, 'Invalid or expired OAuth state. Start again from /auth/whoop/start', 'INVALID_STATE');
     }
 
     logger.info('Received WHOOP OAuth callback, exchanging code for tokens');
@@ -653,6 +664,11 @@ router.get(
       throw new AppError(400, 'Missing or invalid authorization code', 'INVALID_CODE');
     }
 
+    // CSRF: the state must be one we issued from /auth/withings/start, unused and unexpired.
+    if (!consumeOAuthState('withings', req.query.state)) {
+      throw new AppError(400, 'Invalid or expired OAuth state. Start again from /auth/withings/start', 'INVALID_STATE');
+    }
+
     logger.info('Received Withings OAuth callback, exchanging code for tokens');
 
     try {
@@ -874,6 +890,11 @@ router.get(
     // Validate authorization code
     if (!code || typeof code !== 'string') {
       throw new AppError(400, 'Missing or invalid authorization code', 'INVALID_CODE');
+    }
+
+    // CSRF: the state must be one we issued from /auth/strava/start, unused and unexpired.
+    if (!consumeOAuthState('strava', req.query.state)) {
+      throw new AppError(400, 'Invalid or expired OAuth state. Start again from /auth/strava/start', 'INVALID_STATE');
     }
 
     logger.info('Received Strava OAuth callback, exchanging code for tokens');

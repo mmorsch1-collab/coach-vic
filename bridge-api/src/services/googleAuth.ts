@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
+import { issueOAuthState } from '../middleware/security.js';
 import { tokenStorage, TokenData } from '../storage/tokenStorage.js';
 import { withRefreshLock, isInvalidGrantError, RetryableRefreshError } from './refreshGuard.js';
 
@@ -45,6 +46,7 @@ export class GoogleAuthService {
       access_type: 'offline', // Get refresh token
       scope: this.SCOPES,
       prompt: 'consent', // Force consent screen to get refresh token
+      state: issueOAuthState('google'), // single-use, verified on callback
     });
 
     logger.debug({ url }, 'Generated OAuth authorization URL');

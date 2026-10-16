@@ -14,12 +14,30 @@ import {
   whoopHistoryQuerySchema,
   createWorkoutSchema,
 } from '../validation/schemas.js';
+import { sheetAccessGuard, isRealDate } from '../validation/sheetAccess.js';
 
 const router = Router();
 
 // PERFORMANCE: Apply authentication middleware to all routes
 // This runs once per request instead of checking auth in every endpoint
+// Tab/range/data allowlist for the generic sheet endpoints — runs BEFORE auth.
+router.use(sheetAccessGuard);
+// /workout/:date — validate the date before auth too.
+router.use((req: Request, res: Response, next) => {
+  const m = /^\/workout\/([^/]+)\/?$/.exec(req.path);
+  if (m && !isRealDate(decodeURIComponent(m[1]))) {
+    return res.status(400).json({ success: false, error: { message: 'date must be YYYY-MM-DD', code: 'INVALID_INPUT' } });
+  }
+  return next();
+});
 router.use(requireGoogleAuth);
+
+const requireDateParam = (req: Request, res: Response, next: () => void) => {
+  if (!isRealDate(req.params.date)) {
+    return res.status(400).json({ success: false, error: { message: 'date must be YYYY-MM-DD', code: 'INVALID_INPUT' } });
+  }
+  return next();
+};
 
 // ========== GOALS ==========
 
@@ -248,6 +266,7 @@ router.post(
  */
 router.get(
   '/workout/:date',
+  requireDateParam,
   asyncHandler(async (req: Request, res: Response) => {
     const { date } = req.params;
     logger.info({ date }, 'Fetching workout sheet');
@@ -269,6 +288,7 @@ router.get(
  */
 router.delete(
   '/workout/:date',
+  requireDateParam,
   asyncHandler(async (req: Request, res: Response) => {
     const { date } = req.params;
     logger.info({ date }, 'Deleting workout sheet');

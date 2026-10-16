@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
+import { issueOAuthState } from '../middleware/security.js';
 import { tokenStorage, TokenData } from '../storage/tokenStorage.js';
 import { withRefreshLock, isInvalidGrantError, RetryableRefreshError } from './refreshGuard.js';
 
@@ -30,19 +31,12 @@ export class WithingsAuthService {
       client_id: config.withings.clientId,
       redirect_uri: config.withings.redirectUri,
       scope: this.SCOPES.join(','),
-      state: this.generateState(),
+      state: issueOAuthState('withings'), // single-use, verified on callback
     });
 
     const url = `${this.WITHINGS_AUTH_URL}?${params.toString()}`;
     logger.debug({ url }, 'Generated Withings OAuth authorization URL');
     return url;
-  }
-
-  /**
-   * Generate random state parameter for CSRF protection
-   */
-  private generateState(): string {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
   }
 
   /**

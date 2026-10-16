@@ -4,8 +4,37 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { SuccessResponse } from '../types.js';
 import { googleAuth } from '../services/googleAuth.js';
 import { logger } from '../logger.js';
+import { z } from 'zod';
 
 const router = Router();
+
+// ---- input validation (2026-10-16): event fields were passed straight to Google ----
+const DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})?$/;
+const eventFields = {
+  title: z.string().trim().min(1).max(200),
+  startTime: z.string().regex(DATETIME, 'startTime must be YYYY-MM-DDTHH:MM[:SS]'),
+  endTime: z.string().regex(DATETIME, 'endTime must be YYYY-MM-DDTHH:MM[:SS]'),
+  description: z.string().max(4000).optional(),
+  location: z.string().max(300).optional(),
+  attendees: z.array(z.string().email()).max(20).optional(),
+  timeZone: z.string().regex(/^[A-Za-z_]+(\/[A-Za-z0-9_+-]+){0,2}$/).max(64).optional(),
+};
+const createEventSchema = z
+  .object(eventFields)
+  .refine((e) => e.endTime > e.startTime, { message: 'endTime must be after startTime' });
+const updateEventSchema = z.object({
+  title: eventFields.title.optional(),
+  startTime: eventFields.startTime.optional(),
+  endTime: eventFields.endTime.optional(),
+  description: eventFields.description,
+  location: eventFields.location,
+  attendees: eventFields.attendees,
+  timeZone: eventFields.timeZone,
+});
+const EVENT_ID = /^[A-Za-z0-9_-]{1,1024}$/;
+function requireEventId(id: string): void {
+  if (!EVENT_ID.test(id)) throw new AppError(400, 'Invalid event id', 'INVALID_INPUT');
+}
 
 // Calendar event interface
 interface CalendarEvent {
@@ -205,7 +234,7 @@ router.post(
       );
     }
 
-    const { title, startTime, endTime, description, location, attendees } = req.body;
+    const { title, startTime, endTime, description, location, attendees, timeZone: tzIn } = createEventSchema.parse(req.body);
 
     if (!title || !startTime || !endTime) {
       throw new AppError(400, 'Missing required fields: title, startTime, endTime', 'INVALID_INPUT');
@@ -215,7 +244,7 @@ router.post(
       const auth = await googleAuth.getAuthenticatedClient();
       const calendar = google.calendar({ version: 'v3', auth });
 
-      const timeZone = req.body.timeZone || 'America/New_York';
+      const timeZone = tzIn || 'America/New_York';
 
       const event = {
         summary: title,
@@ -268,6 +297,8 @@ router.put(
   '/events/:id',
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
+    requireEventId(id);
+    const upd = updateEventSchema.parse(req.body ?? {});
     logger.info({ eventId: id }, 'Updating calendar event');
 
     const isAuthenticated = await googleAuth.isAuthenticated();
@@ -290,9 +321,9 @@ router.put(
       });
 
       // Merge updates with existing data
-      const { title, startTime, endTime, description, location, attendees } = req.body;
+      const { title, startTime, endTime, description, location, attendees } = upd;
 
-      const timeZone = req.body.timeZone || 'America/New_York';
+      const timeZone = upd.timeZone || 'America/New_York';
 
       const updatedEvent = {
         ...existing.data,
@@ -348,6 +379,7 @@ router.delete(
   '/events/:id',
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
+    requireEventId(id);
     logger.info({ eventId: id }, 'Deleting calendar event');
 
     const isAuthenticated = await googleAuth.isAuthenticated();

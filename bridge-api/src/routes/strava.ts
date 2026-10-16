@@ -121,8 +121,8 @@ router.get(
     }
 
     try {
-      const perPage = Math.min(parseInt(req.query.per_page as string) || 30, 200);
-      const page = parseInt(req.query.page as string) || 1;
+      const perPage = Math.min(Math.max(parseInt(req.query.per_page as string) || 30, 1), 200);
+      const page = Math.min(Math.max(parseInt(req.query.page as string) || 1, 1), 1000);
       const before = req.query.before ? parseInt(req.query.before as string) : undefined;
       const after = req.query.after ? parseInt(req.query.after as string) : undefined;
 
@@ -279,6 +279,9 @@ router.get(
   '/activity/:id',
   asyncHandler(async (req: Request, res: Response) => {
     const activityId = req.params.id;
+    if (!/^\d{1,20}$/.test(activityId)) {
+      throw new AppError(400, 'activity id must be numeric', 'INVALID_INPUT');
+    }
     logger.info({ activityId }, 'Fetching Strava activity details');
 
     const isAuthenticated = await stravaAuth.isAuthenticated();
