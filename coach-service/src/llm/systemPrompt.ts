@@ -90,7 +90,13 @@ export async function buildDynamicSystem(opts: DynamicOptions): Promise<string> 
 
   // Computed coaching snapshot — the coach's always-on mental model of Matt.
   try {
-    const snap = await buildSnapshot();
+    let snap = await buildSnapshot();
+    // Scheduled jobs never see the running protein tally: GOAL.md's hands-off rule
+    // means no proactive message should ever be about protein, and a "Xg to go"
+    // line in context is exactly what invites one. Chat keeps it (log_meal flow).
+    if (opts.sessionType === 'isolated') {
+      snap = snap.split('\n').filter((l) => !/^Protein\b/.test(l)).join('\n');
+    }
     if (snap.trim()) parts.push(snap);
   } catch {
     /* snapshot is best-effort; never block a turn on it */
