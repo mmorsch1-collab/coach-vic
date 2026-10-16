@@ -71,6 +71,8 @@ export function scrubSecrets(value: unknown, opts: { health?: boolean } = {}, de
 export function safeErr(err: unknown): Record<string, unknown> {
   if (!err || typeof err !== 'object') return { message: scrubText(String(err)) };
   const e = err as any;
+  // Already serialized by safeErr (pino runs formatters.log before serializers) — keep as is.
+  if (!(err instanceof Error) && typeof e.type === 'string' && typeof e.message === 'string') return e;
   // Callers often log `{ err: error.response?.data || error }` — a plain provider
   // body, not an Error. Keep it (scrubbed) instead of reducing it to "Object".
   if (!(err instanceof Error) && e.message == null && e.response == null) {

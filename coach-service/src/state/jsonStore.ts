@@ -60,7 +60,17 @@ export class JsonStore<T> {
       .slice(2)}.tmp`;
     try {
       await fs.writeFile(tmp, JSON.stringify(state, null, 2), 'utf-8');
-      await fs.rename(tmp, this.filePath);
+      // Windows: rename over a file that an AV scanner/indexer briefly holds
+      // fails with EPERM/EBUSY. Retry a few times before giving up.
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await fs.rename(tmp, this.filePath);
+          break;
+        } catch (err: any) {
+          if (attempt >= 5 || !['EPERM', 'EBUSY', 'EACCES'].includes(err?.code)) throw err;
+          await new Promise((r) => setTimeout(r, 20 * (attempt + 1)));
+        }
+      }
       this.cache = state;
     } catch (err) {
       try {
